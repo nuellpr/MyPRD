@@ -4,7 +4,7 @@
  * Isi pesan & PRD disimpan terenkripsi (AES-256-GCM) di kolom `*_enc`,
  * lalu didekripsi saat dibaca supaya tidak tersebar logika crypto di route.
  */
-import { getDb, startOfMonthMs, type BookingRow, type MessageRow, type OrderRow, type PrdRow, type ProjectRow } from "./db.ts";
+import { getDb, startOfMonthMs, type BookingRow, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type UserRow } from "./db.ts";
 import { decryptContent, encryptContent, newId } from "./crypto.ts";
 import { evaluateQuota, getPlan, type QuotaState } from "./plans.ts";
 
@@ -347,6 +347,29 @@ export function setOrderStatus(orderId: string, status: "failed" | "expired"): O
 
 export function updateUserPlan(userId: string, plan: string): void {
   getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(getPlan(plan).id, userId);
+}
+
+/**
+ * Login OAuth: cari user by email, buat baru (tanpa password) kalau belum ada.
+ * Email yang sama antara password & Google dianggap satu akun (Google sudah
+ * memverifikasi kepemilikan email).
+ */
+export function findOrCreateOAuthUser(email: string, name: string): UserRow {
+  const normalized = email.trim().toLowerCase();
+  const existing = getDb().prepare("SELECT * FROM users WHERE email = ?").get(normalized) as UserRow | undefined;
+  if (existing) return existing;
+  const row: UserRow = {
+    id: newId("usr"),
+    email: normalized,
+    name: name.trim() || normalized.split("@")[0],
+    password_hash: null,
+    plan: "free",
+    created_at: Date.now(),
+  };
+  getDb()
+    .prepare("INSERT INTO users (id, email, name, password_hash, plan, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(row.id, row.email, row.name, row.password_hash, row.plan, row.created_at);
+  return row;
 }
 
 export type BookingStatus = "pending_payment" | "scheduled" | "done" | "cancelled";

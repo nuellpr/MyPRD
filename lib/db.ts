@@ -14,7 +14,7 @@ export interface UserRow {
   id: string;
   email: string;
   name: string;
-  password_hash: string;
+  password_hash: string | null; // null = user login via OAuth (tanpa password)
   plan: string;
   created_at: number;
 }
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE,
   name          TEXT NOT NULL DEFAULT '',
-  password_hash TEXT NOT NULL,
+  password_hash TEXT, -- nullable: user OAuth tidak punya password
   plan          TEXT NOT NULL DEFAULT 'free',
   created_at    INTEGER NOT NULL
 );
@@ -181,7 +181,34 @@ function initDb(): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  migrateUsersPasswordNullable(db);
   return db;
+}
+
+/**
+ * Migrasi sekali jalan: DB lama punya `password_hash NOT NULL`, rebuild
+ * tabel agar user OAuth (tanpa password) bisa disimpan sebagai NULL.
+ * No-op untuk DB baru maupun yang sudah termigrasi.
+ */
+export function migrateUsersPasswordNullable(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string; notnull: number }[];
+  if (cols.find((c) => c.name === "password_hash")?.notnull !== 1) return;
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    CREATE TABLE users_new (
+      id            TEXT PRIMARY KEY,
+      email         TEXT NOT NULL UNIQUE,
+      name          TEXT NOT NULL DEFAULT '',
+      password_hash TEXT,
+      plan          TEXT NOT NULL DEFAULT 'free',
+      created_at    INTEGER NOT NULL
+    );
+    INSERT INTO users_new (id, email, name, password_hash, plan, created_at)
+      SELECT id, email, name, password_hash, plan, created_at FROM users;
+    DROP TABLE users;
+    ALTER TABLE users_new RENAME TO users;
+    PRAGMA foreign_keys = ON;
+  `);
 }
 
 export function getDb(): DatabaseSync {

@@ -160,6 +160,18 @@ async function main() {
     check("daftar model memuat provider mock", Array.isArray(models.providers) && models.providers.some((p) => p.id === "mock"));
     check("defaultModel format provider/model", String(models.defaultModel).includes("/"));
 
+    section("2b. Login Google (OAuth)");
+    const oauthStart = await fetch(`${BASE}/api/auth/google?next=/dashboard`, { redirect: "manual" });
+    const oauthStartLoc = oauthStart.headers.get("location") ?? "";
+    if (oauthStart.status === 503) {
+      check("tanpa kredensial → 503 + pesan konfigurasi", (await oauthStart.text()).includes("belum dikonfigurasi"));
+    } else {
+      check("dengan kredensial → redirect ke Google", oauthStart.status === 302 && oauthStartLoc.includes("accounts.google.com"), `status ${oauthStart.status}`);
+    }
+    const oauthCb = await fetch(`${BASE}/api/auth/google/callback`, { redirect: "manual" });
+    const oauthCbLoc = oauthCb.headers.get("location") ?? "";
+    check("callback tanpa code → redirect /login?oauth=gagal", oauthCb.status === 302 && oauthCbLoc.includes("/login?oauth=gagal"), `status ${oauthCb.status}`);
+
     section("3. Buat project");
     const created = await api("/api/projects", {
       method: "POST",

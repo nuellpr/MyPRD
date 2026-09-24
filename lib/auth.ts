@@ -1,8 +1,6 @@
 /**
- * Autentikasi: sesi berbasis cookie httpOnly + hash password scrypt.
- *
- * Catatan: email/password saja untuk MVP (sesuai roadmap Fase 1). OAuth Google
- * bisa ditambahkan nanti karena pemisahan ini hanya di layer route + repo.
+ * Autentikasi: sesi berbasis cookie httpOnly + hash password scrypt,
+ * plus login via Google OAuth (user OAuth tersimpan dengan password_hash NULL).
  */
 import { cookies } from "next/headers";
 import { getDb, type UserRow } from "./db.ts";
@@ -64,7 +62,8 @@ export function createUser({ email, password, name }: CreateUserInput): UserRow 
 
 export function authenticate(email: string, password: string): UserRow {
   const user = findUserByEmail(email);
-  if (!user || !verifyPassword(password, user.password_hash)) {
+  // User OAuth tidak punya password — tolak di sini (bukan 500 dari scrypt).
+  if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
     throw new AuthError("Email atau password salah.", 401);
   }
   return user;

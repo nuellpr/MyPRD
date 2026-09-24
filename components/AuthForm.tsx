@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; googleEnabled: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,6 +12,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [loading, setLoading] = useState(false);
 
   const isRegister = mode === "register";
+  const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const nextParam = query?.get("next");
+  const googleHref = `/api/auth/google${
+    nextParam && nextParam.startsWith("/") ? `?next=${encodeURIComponent(nextParam)}` : ""
+  }`;
+  const oauthFailed = query?.get("oauth") === "gagal";
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -89,8 +95,10 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         />
       </div>
 
-      {error ? (
-        <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</p>
+      {error || oauthFailed ? (
+        <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error || "Login Google gagal atau dibatalkan. Coba lagi."}
+        </p>
       ) : null}
 
       <button
@@ -100,6 +108,22 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       >
         {loading ? "Memproses..." : isRegister ? "Buat akun gratis" : "Masuk"}
       </button>
+
+      {googleEnabled ? (
+        <>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span className="h-px flex-1 bg-slate-800" />
+            atau
+            <span className="h-px flex-1 bg-slate-800" />
+          </div>
+          <a
+            href={googleHref}
+            className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2.5 text-center text-sm font-semibold text-slate-100 transition hover:border-slate-500"
+          >
+            Lanjutkan dengan Google
+          </a>
+        </>
+      ) : null}
     </form>
   );
 }

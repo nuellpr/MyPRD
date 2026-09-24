@@ -19,7 +19,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js, TanStack & FastAPI + prompt install sekali salin untuk AI agent |
 | Dictation ide | ✅ | Tombol mic di form ide (Web Speech API Bahasa Indonesia, tanpa server) |
 | Export | ✅ | Markdown, JSON, checklist task `.md`, task `.json`, dan print → PDF dari browser |
-| Auth | ✅ | Email + password (scrypt), sesi cookie httpOnly bertanda tangan HMAC |
+| Auth | ✅ | Email + password (scrypt) **dan login Google OAuth** (opsional, via `GOOGLE_CLIENT_ID`); sesi cookie httpOnly bertanda tangan HMAC |
 | Riwayat project | ✅ | Dashboard berisi daftar PRD dengan status & model terakhir |
 | Kuota free tier | ✅ | Dihitung dari usage per bulan, blokir 402 + pesan upgrade saat habis |
 | Pricing | ✅ | 3 tier (Free/Starter/Pro) di landing page |
@@ -98,7 +98,7 @@ app/
   templates/                   galeri template + halaman detail + prompt install
   dashboard/page.tsx           daftar project + sisa kuota
   dashboard/[id]/page.tsx      workspace: chat streaming + panel PRD
-  api/auth/*                   register, login, logout, me
+  api/auth/*                   register, login, logout, me, google (OAuth)
   api/models/                  daftar provider & model yang tersedia
   api/projects/                CRUD project
   api/projects/[id]/chat/      POST → SSE streaming balasan AI
@@ -117,7 +117,8 @@ lib/
   db.ts          skema SQLite (node:sqlite)
   repo.ts        repository project/message/prd/usage/order/booking
   billing.ts     provider Midtrans Snap + mock, signature webhook, produk konsultasi
-  auth.ts        sesi & password
+  auth.ts        sesi & password (user OAuth tersimpan tanpa password)
+  oauth.ts       login Google: URL otorisasi, tukar code, profil, state HMAC
   crypto.ts      scrypt, HMAC session, AES-256-GCM
   safety.ts      sanitasi input & anti prompt injection
   rate-limit.ts  sliding window in-memory
