@@ -156,7 +156,7 @@ export default async function HomePage() {
             <PricingCards highlight="free" />
           </div>
           <p className="mt-6 text-center text-xs text-slate-500">
-            Pembayaran lokal (Midtrans/Xendit) sedang disiapkan — paket berbayar aktif di fase berikutnya.
+            Pembayaran lokal via Midtrans (QRIS, e-wallet, transfer bank) — klik paket berbayar untuk checkout.
           </p>
         </section>
 

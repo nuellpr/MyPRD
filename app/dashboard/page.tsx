@@ -44,6 +44,10 @@ export default async function DashboardPage() {
           </div>
           <p className="text-xs text-slate-500">
             Paket: <span className="font-medium text-slate-300">{plan.name}</span>
+            {" · "}
+            <Link href="/billing" className="text-sky-400 hover:underline">
+              {plan.id === "free" ? "Upgrade →" : "Kelola billing →"}
+            </Link>
           </p>
         </div>
 

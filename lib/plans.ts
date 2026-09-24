@@ -1,8 +1,8 @@
 /**
  * Aturan paket/langganan & kuota.
  *
- * MVP: hanya tier free yang aktif, tapi struktur tier sudah disiapkan supaya
- * penambahan billing (Midtrans/Xendit) tinggal mengubah `plan` di tabel users.
+ * Upgrade paket lewat /billing (Midtrans Snap, atau simulasi mock untuk lokal);
+ * webhook yang terverifikasi mengubah `plan` di tabel users via repo.markOrderPaid.
  */
 import { freeMonthlyQuota } from "./env.ts";
 

@@ -41,7 +41,7 @@ export function PricingCards({ highlight }: { highlight?: PlanId }) {
               ))}
             </ul>
             <Link
-              href={id === "free" ? "/register" : "/register?plan=" + id}
+              href={id === "free" ? "/register" : "/billing"}
               className={`mt-6 rounded-lg px-4 py-2.5 text-center text-sm font-medium transition ${
                 isHighlight
                   ? "bg-sky-500 text-slate-950 hover:bg-sky-400"

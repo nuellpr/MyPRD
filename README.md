@@ -25,7 +25,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Pricing | ✅ | 3 tier (Free/Starter/Pro) di landing page |
 | Keamanan | ✅ | Enkripsi at-rest AES-256-GCM untuk chat & PRD, rate limiting, proteksi prompt injection, sanitasi input |
 | Monitoring biaya AI | ✅ | Tabel `usage_events` menyimpan token & estimasi biaya per request |
-| Billing (Midtrans/Xendit) | ⏳ Fase 2 | Struktur `plans` & kolom `users.plan` sudah siap |
+| Billing (Midtrans) | ✅ | `/billing`: checkout Snap + webhook terverifikasi + mode simulasi mock tanpa merchant key |
 | Komunitas Discord / konsultasi | ⏳ Fase 3 | Link tersedia di footer |
 
 ---
@@ -148,6 +148,13 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 - **Template** (`/templates`, publik): katalog starter kit (saat ini Starter Next.js, Starter TanStack, dan Starter FastAPI — semuanya + PostgreSQL + Docker). Tiap template punya halaman detail berisi daftar isi, **prompt install** yang bisa disalin (tempel ke Claude Code/Cursor/OpenCode di folder kosong, agent yang men-scaffold codebase), langkah "Cara mulai", dan tombol **Bikin PRD dengan template** yang membuka form project baru dengan konteks tech stack terisi otomatis (`/dashboard?template=<slug>`).
 - **Dictation**: tombol 🎙 di form ide memakai Web Speech API (`id-ID`, gratis, tanpa server). Hasil ucapan final ditempel ke textarea; tombol tidak tampil kalau browser tidak mendukung.
 
+### Billing & pembayaran
+
+- **Halaman `/billing`** (login dulu): pilih Starter (Rp49.000) / Pro (Rp149.000), riwayat order (menunggu/lunas/gagal/kedaluwarsa), tombol upgrade di dashboard.
+- **Midtrans Snap**: checkout membuat order `pending` + Snap token; user membayar lewat popup (QRIS/e-wallet/VA bank); `POST /api/billing/webhook` memverifikasi `signature_key` (SHA512) lalu menandai lunas + upgrade `users.plan`. Idempoten dan order lunas tidak pernah diturunkan.
+- **Mode mock** (tanpa merchant key): order diselesaikan lewat tombol "Simulasikan bayar" — alur yang sama, cocok untuk dev/test lokal.
+- **Setup asli**: isi `MIDTRANS_SERVER_KEY` + `MIDTRANS_CLIENT_KEY` (mulai dari sandbox), daftarkan Payment Notification URL `https://domainmu/api/billing/webhook` di dashboard Midtrans. Webhook butuh URL publik (mis. via ngrok untuk coba lokal).
+
 ### Keamanan & batasan
 
 - **Enkripsi at-rest**: isi pesan chat dan PRD disimpan sebagai ciphertext AES-256-GCM (`v1.iv.tag.ct`), key diturunkan dari `APP_SECRET`.
@@ -168,7 +175,7 @@ Provider seperti Gemini free tier kadang butuh waktu lama sebelum token pertama,
 
 ## Data
 
-SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `projects`, `messages`, `prds`, `usage_events`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
+SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `projects`, `messages`, `prds`, `usage_events`, `orders`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
 
 Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND created_at >= awal bulan`, sehingga reset otomatis tanpa job terjadwal.
 
@@ -176,5 +183,5 @@ Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND create
 
 ## Roadmap
 
-- **Fase 2** — billing Midtrans/Xendit + Stripe, template & starter kit (Next.js+Supabase, FastAPI+Postgres), integrasi repo Git.
+- **Fase 2** — ✅ billing Midtrans, ✅ template & starter kit (Next.js, TanStack, FastAPI); sisa: Xendit/Stripe, integrasi repo Git.
 - **Fase 3** — Discord bot & leaderboard, booking konsultasi + pembayaran di muka, eksekusi task otomatis.

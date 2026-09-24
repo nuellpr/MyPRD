@@ -259,7 +259,38 @@ async function main() {
     check("pesan error menyebut kuota & upgrade", /kuota/i.test(String(thirdBody.error)) && /upgrade/i.test(String(thirdBody.error)));
     check("402 menyertakan state kuota", thirdBody.quota?.allowed === false);
 
-    section("8. Isolasi antar user & logout");
+    section("8. Billing mock: checkout → simulasi bayar → upgrade paket");
+    const checkoutFree = await api("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan: "free" }) });
+    check("checkout paket free → 400", checkoutFree.status === 400, `status ${checkoutFree.status}`);
+    const checkout = await api("/api/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ plan: "starter" }),
+    });
+    const checkoutBody = await json(checkout);
+    check(
+      "checkout starter → 200 + order pending (mock)",
+      checkout.status === 200 && checkoutBody.order?.status === "pending" && checkoutBody.provider === "mock",
+      checkout.status,
+    );
+    check("nominal order Rp49.000", checkoutBody.order?.amountIdr === 49000);
+    const complete = await api("/api/billing/mock-complete", {
+      method: "POST",
+      body: JSON.stringify({ order_id: checkoutBody.order?.id }),
+    });
+    const completeBody = await json(complete);
+    check("mock-complete → 200 + order paid", complete.status === 200 && completeBody.order?.status === "paid", complete.status);
+    const meAfter = await json(await api("/api/auth/me"));
+    check("paket user jadi starter", meAfter.user?.plan === "starter", meAfter.user?.plan);
+    check("kuota mengikuti paket starter (100)", meAfter.quota?.limit === 100, meAfter.quota?.limit);
+    const ordersList = await json(await api("/api/billing/orders"));
+    check(
+      "riwayat orders memuat order lunas",
+      Array.isArray(ordersList.orders) && ordersList.orders.some((o) => o.id === checkoutBody.order?.id && o.status === "paid"),
+    );
+    const billingPage = await api("/billing");
+    check("halaman /billing → 200", billingPage.status === 200, `status ${billingPage.status}`);
+
+    section("9. Isolasi antar user & logout");
     const otherCookie = cookie;
     cookie = "";
     const otherEmail = `smoke_other_${Date.now()}@example.com`;

@@ -48,6 +48,18 @@ export interface PrdRow {
   updated_at: number;
 }
 
+export interface OrderRow {
+  id: string;
+  user_id: string;
+  plan: string;
+  amount_idr: number;
+  status: string;
+  provider: string;
+  provider_ref: string;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface UsageRow {
   id: string;
   user_id: string;
@@ -123,6 +135,19 @@ CREATE TABLE IF NOT EXISTS usage_events (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_usage_user_time ON usage_events(user_id, created_at);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan         TEXT NOT NULL,
+  amount_idr   INTEGER NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  provider     TEXT NOT NULL DEFAULT 'mock',
+  provider_ref TEXT NOT NULL DEFAULT '',
+  created_at   INTEGER NOT NULL,
+  updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
 `;
 
 function initDb(): DatabaseSync {

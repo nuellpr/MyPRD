@@ -4,9 +4,9 @@
  * Isi pesan & PRD disimpan terenkripsi (AES-256-GCM) di kolom `*_enc`,
  * lalu didekripsi saat dibaca supaya tidak tersebar logika crypto di route.
  */
-import { getDb, startOfMonthMs, type MessageRow, type PrdRow, type ProjectRow } from "./db.ts";
+import { getDb, startOfMonthMs, type MessageRow, type OrderRow, type PrdRow, type ProjectRow } from "./db.ts";
 import { decryptContent, encryptContent, newId } from "./crypto.ts";
-import { evaluateQuota, type QuotaState } from "./plans.ts";
+import { evaluateQuota, getPlan, type QuotaState } from "./plans.ts";
 
 export interface Project {
   id: string;
@@ -243,4 +243,105 @@ export function getUsageSummary(userId: string, sinceMs = 0): UsageSummary {
       events: Number(r.events),
     })),
   };
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  plan: string;
+  amountIdr: number;
+  status: string;
+  provider: string;
+  providerRef: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+function toOrder(row: OrderRow): Order {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    plan: row.plan,
+    amountIdr: Number(row.amount_idr),
+    status: row.status,
+    provider: row.provider,
+    providerRef: row.provider_ref,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function createOrder(input: { userId: string; plan: string; amountIdr: number; provider: string }): Order {
+  const now = Date.now();
+  const row: OrderRow = {
+    id: newId("ord"),
+    user_id: input.userId,
+    plan: input.plan,
+    amount_idr: input.amountIdr,
+    status: "pending",
+    provider: input.provider,
+    provider_ref: "",
+    created_at: now,
+    updated_at: now,
+  };
+  getDb()
+    .prepare(
+      "INSERT INTO orders (id, user_id, plan, amount_idr, status, provider, provider_ref, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(row.id, row.user_id, row.plan, row.amount_idr, row.status, row.provider, row.provider_ref, row.created_at, row.updated_at);
+  return toOrder(row);
+}
+
+/** Ambil order milik user (untuk UI). */
+export function getOrder(userId: string, orderId: string): Order | null {
+  const row = getDb().prepare("SELECT * FROM orders WHERE id = ? AND user_id = ?").get(orderId, userId) as
+    | OrderRow
+    | undefined;
+  return row ? toOrder(row) : null;
+}
+
+/** Ambil order tanpa scope user — hanya untuk webhook provider. */
+export function getOrderById(orderId: string): Order | null {
+  const row = getDb().prepare("SELECT * FROM orders WHERE id = ?").get(orderId) as OrderRow | undefined;
+  return row ? toOrder(row) : null;
+}
+
+export function listOrders(userId: string): Order[] {
+  const rows = getDb().prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC").all(userId) as unknown as OrderRow[];
+  return rows.map(toOrder);
+}
+
+export function setOrderProviderRef(orderId: string, ref: string): void {
+  getDb().prepare("UPDATE orders SET provider_ref = ?, updated_at = ? WHERE id = ?").run(ref, Date.now(), orderId);
+}
+
+/**
+ * Tandai order lunas + upgrade paket user. Idempoten: kalau order sudah `paid`,
+ * tidak ada perubahan dan `alreadyPaid` true (notifikasi ganda aman).
+ */
+export function markOrderPaid(orderId: string): { order: Order; alreadyPaid: boolean } | null {
+  const order = getOrderById(orderId);
+  if (!order) return null;
+  if (order.status === "paid") return { order, alreadyPaid: true };
+  const plan = getPlan(order.plan);
+  getDb().prepare("UPDATE orders SET status = 'paid', updated_at = ? WHERE id = ?").run(Date.now(), orderId);
+  getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(plan.id, order.userId);
+  const updated = getOrderById(orderId);
+  if (!updated) return null;
+  return { order: updated, alreadyPaid: false };
+}
+
+/**
+ * Ubah status order non-paid (gagal/kedaluwarsa). Order yang sudah `paid`
+ * tidak pernah diturunkan — proteksi dari notifikasi susulan.
+ */
+export function setOrderStatus(orderId: string, status: "failed" | "expired"): Order | null {
+  const order = getOrderById(orderId);
+  if (!order || order.status !== "pending") return order;
+  getDb().prepare("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?").run(status, Date.now(), orderId);
+  return getOrderById(orderId);
+}
+
+export function updateUserPlan(userId: string, plan: string): void {
+  getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(getPlan(plan).id, userId);
 }
