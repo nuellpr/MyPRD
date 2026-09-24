@@ -60,6 +60,18 @@ export interface OrderRow {
   updated_at: number;
 }
 
+export interface BookingRow {
+  id: string;
+  user_id: string;
+  topic: string;
+  contact: string;
+  preferred_date: string;
+  status: string;
+  order_id: string;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface UsageRow {
   id: string;
   user_id: string;
@@ -148,6 +160,20 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  topic          TEXT NOT NULL,
+  contact        TEXT NOT NULL DEFAULT '',
+  preferred_date TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'pending_payment',
+  order_id       TEXT NOT NULL DEFAULT '',
+  created_at     INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_order ON bookings(order_id) WHERE order_id <> '';
 `;
 
 function initDb(): DatabaseSync {

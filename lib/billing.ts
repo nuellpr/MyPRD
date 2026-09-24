@@ -65,6 +65,17 @@ export function checkoutPlan(planId: string) {
   return plan;
 }
 
+/**
+ * Produk konsultasi: sekali bayar per sesi (bukan langganan), jadi tidak
+ * masuk PLANS. Order-nya menumpang tabel `orders` dengan plan = id di bawah;
+ * repo.markOrderPaid TIDAK meng-upgrade paket untuk plan non-langganan.
+ */
+export const CONSULT_PRODUCT = {
+  id: "consult-60",
+  name: "Konsultasi 1 sesi (60 menit)",
+  priceIdr: 199000,
+} as const;
+
 export interface SnapResult {
   token: string;
   redirectUrl: string;
@@ -77,6 +88,8 @@ export async function createSnapTransaction(input: {
   planName: string;
   customerEmail: string;
   customerName: string;
+  /** Nama item di dashboard Midtrans (default: langganan 1 bulan). */
+  itemName?: string;
 }): Promise<SnapResult> {
   const serverKey = midtransServerKey();
   if (!serverKey) {
@@ -98,7 +111,7 @@ export async function createSnapTransaction(input: {
             id: input.planName.toLowerCase(),
             price: input.amountIdr,
             quantity: 1,
-            name: `MyPRD ${input.planName} — langganan 1 bulan`,
+            name: input.itemName ?? `MyPRD ${input.planName} — langganan 1 bulan`,
           },
         ],
         customer_details: { first_name: input.customerName || input.customerEmail, email: input.customerEmail },

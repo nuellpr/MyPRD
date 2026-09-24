@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
 import { BillingError, billingProvider } from "@/lib/billing";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
-import { getOrder, markOrderPaid } from "@/lib/repo";
+import { getOrder, confirmBookingPayment } from "@/lib/repo";
 
 /**
  * Simulasi pembayaran berhasil — HANYA untuk provider mock (dev/test lokal).
- * Body: { order_id: string }. Menandai order lunas + upgrade paket user.
+ * Body: { order_id: string }. Menandai order lunas (+ upgrade paket untuk
+ * order langganan, atau menjadwalkan booking untuk order konsultasi).
  */
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     if (order.provider !== "mock") {
       throw new BillingError("Order ini memakai Midtrans — selesaikan via pembayaran asli.", 400);
     }
-    const result = markOrderPaid(order.id);
+    const result = confirmBookingPayment(order.id);
     if (!result) return jsonError("Order tidak ditemukan.", 404);
     return jsonOk({ order: result.order, alreadyPaid: result.alreadyPaid });
   } catch (error) {

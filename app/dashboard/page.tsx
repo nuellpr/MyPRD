@@ -84,6 +84,14 @@ export default async function DashboardPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Konsultasi</p>
+            <p className="mt-2 text-sm text-slate-300">Sesi 1-on-1 60 menit: review PRD & arahan eksekusi.</p>
+            <Link href="/konsultasi" className="mt-3 inline-block text-sm text-sky-400 hover:underline">
+              Booking sesi →
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
             <p className="text-xs uppercase tracking-wide text-slate-500">Komunitas</p>
             <p className="mt-2 text-sm text-slate-300">Diskusi, template, dan coaching bareng builder lain.</p>
             <a

@@ -201,7 +201,7 @@ export function BillingPanel({
               >
                 <div>
                   <p className="font-medium">
-                    {order.plan} · {formatIdr(order.amountIdr)}
+                    {order.plan === "consult-60" ? "Konsultasi 1 sesi" : order.plan} · {formatIdr(order.amountIdr)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     {order.id} · {formatDate(order.createdAt)}

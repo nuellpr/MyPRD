@@ -26,6 +26,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Keamanan | ✅ | Enkripsi at-rest AES-256-GCM untuk chat & PRD, rate limiting, proteksi prompt injection, sanitasi input |
 | Monitoring biaya AI | ✅ | Tabel `usage_events` menyimpan token & estimasi biaya per request |
 | Billing (Midtrans) | ✅ | `/billing`: checkout Snap + webhook terverifikasi + mode simulasi mock tanpa merchant key |
+| Konsultasi & coaching | ✅ | `/konsultasi`: booking sesi 60 mnt Rp199rb bayar di muka, lunas → terjadwal otomatis |
 | Komunitas Discord / konsultasi | ⏳ Fase 3 | Link tersedia di footer |
 
 ---
@@ -114,7 +115,8 @@ lib/
   tasks.ts       parser task breakdown + topological sort + export
   roadmap.ts     peta visual: fase dari dependensi, jalur kritis, daftar fitur
   db.ts          skema SQLite (node:sqlite)
-  repo.ts        repository project/message/prd/usage
+  repo.ts        repository project/message/prd/usage/order/booking
+  billing.ts     provider Midtrans Snap + mock, signature webhook, produk konsultasi
   auth.ts        sesi & password
   crypto.ts      scrypt, HMAC session, AES-256-GCM
   safety.ts      sanitasi input & anti prompt injection
@@ -155,6 +157,12 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 - **Mode mock** (tanpa merchant key): order diselesaikan lewat tombol "Simulasikan bayar" — alur yang sama, cocok untuk dev/test lokal.
 - **Setup asli**: isi `MIDTRANS_SERVER_KEY` + `MIDTRANS_CLIENT_KEY` (mulai dari sandbox), daftarkan Payment Notification URL `https://domainmu/api/billing/webhook` di dashboard Midtrans. Webhook butuh URL publik (mis. via ngrok untuk coba lokal).
 
+### Konsultasi & coaching
+
+- **Halaman `/konsultasi`** (publik, form butuh login): sesi 1-on-1 60 menit Rp199.000, bayar di muka. Isi topik + kontak + jadwal yang diinginkan → booking `pending_payment` + order konsultasi (`consult-60`).
+- Pembayaran menumpang alur billing yang sama (Snap/mock + webhook terverifikasi); saat lunas, booking otomatis jadi `scheduled` via `repo.confirmBookingPayment`. Order konsultasi **tidak mengubah paket langganan** user (guard di `markOrderPaid`).
+- Booking yang belum dibayar bisa dibatalkan user; status `done` dijadwalkan mentor manual (belum ada panel admin — langkah berikutnya).
+
 ### Keamanan & batasan
 
 - **Enkripsi at-rest**: isi pesan chat dan PRD disimpan sebagai ciphertext AES-256-GCM (`v1.iv.tag.ct`), key diturunkan dari `APP_SECRET`.
@@ -175,7 +183,7 @@ Provider seperti Gemini free tier kadang butuh waktu lama sebelum token pertama,
 
 ## Data
 
-SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `projects`, `messages`, `prds`, `usage_events`, `orders`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
+SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `projects`, `messages`, `prds`, `usage_events`, `orders`, `bookings`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
 
 Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND created_at >= awal bulan`, sehingga reset otomatis tanpa job terjadwal.
 
@@ -184,4 +192,4 @@ Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND create
 ## Roadmap
 
 - **Fase 2** — ✅ billing Midtrans, ✅ template & starter kit (Next.js, TanStack, FastAPI); sisa: Xendit/Stripe, integrasi repo Git.
-- **Fase 3** — Discord bot & leaderboard, booking konsultasi + pembayaran di muka, eksekusi task otomatis.
+- **Fase 3** — ✅ booking konsultasi + pembayaran di muka; sisa: Discord bot & leaderboard, eksekusi task otomatis.

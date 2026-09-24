@@ -1,4 +1,4 @@
-import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
+import { confirmBookingPayment, getOrderById, setOrderStatus } from "@/lib/repo";
 import { mapMidtransStatus, verifyMidtransSignature } from "@/lib/billing";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     if (!order) return jsonError("Order tidak ditemukan.", 404);
     const next = mapMidtransStatus(String(body.transaction_status ?? ""), String(body.fraud_status ?? ""));
     if (next === "paid") {
-      markOrderPaid(orderId);
+      confirmBookingPayment(orderId);
     } else if (next === "failed" || next === "expired") {
       setOrderStatus(orderId, next);
     }

@@ -290,7 +290,51 @@ async function main() {
     const billingPage = await api("/billing");
     check("halaman /billing → 200", billingPage.status === 200, `status ${billingPage.status}`);
 
-    section("9. Isolasi antar user & logout");
+    section("9. Booking konsultasi: buat → bayar (mock) → terjadwal");
+    const bookingEmpty = await api("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: "   " }),
+    });
+    check("booking tanpa topik → 400", bookingEmpty.status === 400, `status ${bookingEmpty.status}`);
+    const bookingRes = await api("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: "Review PRD sebelum coding", contact: "0812", preferredDate: "Sabtu pagi" }),
+    });
+    const bookingBody = await json(bookingRes);
+    check(
+      "booking dibuat → pending_payment + order pending",
+      bookingRes.status === 200 && bookingBody.booking?.status === "pending_payment" && bookingBody.order?.status === "pending",
+      bookingRes.status,
+    );
+    check("nominal order konsultasi Rp199.000", bookingBody.order?.amountIdr === 199000, bookingBody.order?.amountIdr);
+    const bookingPay = await api("/api/billing/mock-complete", {
+      method: "POST",
+      body: JSON.stringify({ order_id: bookingBody.order?.id }),
+    });
+    check("bayar order konsultasi → 200", bookingPay.status === 200, `status ${bookingPay.status}`);
+    const bookingsList = await json(await api("/api/bookings"));
+    check(
+      "booking jadi scheduled, paket user TETAP starter",
+      Array.isArray(bookingsList.bookings) &&
+        bookingsList.bookings.some((b) => b.id === bookingBody.booking?.id && b.status === "scheduled"),
+    );
+    const meStill = await json(await api("/api/auth/me"));
+    check("paket tidak berubah oleh order konsultasi", meStill.user?.plan === "starter", meStill.user?.plan);
+    const bookingCancel = await api("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: "Mau dibatalkan" }),
+    });
+    const cancelBody = await json(bookingCancel);
+    const cancelRes = await api(`/api/bookings/${cancelBody.booking?.id}`, { method: "PATCH" });
+    const cancelResBody = await json(cancelRes);
+    check("booking pending bisa dibatalkan", cancelRes.status === 200 && cancelResBody.booking?.status === "cancelled");
+    const konsulPage = await api("/konsultasi");
+    check("halaman /konsultasi → 200", konsulPage.status === 200, `status ${konsulPage.status}`);
+
+    section("10. Isolasi antar user & logout");
     const otherCookie = cookie;
     cookie = "";
     const otherEmail = `smoke_other_${Date.now()}@example.com`;
