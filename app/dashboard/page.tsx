@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { LogoutButton } from "@/components/LogoutButton";
 import { NewProjectForm, type ModelOption } from "@/components/NewProjectForm";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser, toPublicUser } from "@/lib/auth";
@@ -52,6 +53,17 @@ export default async function DashboardPage() {
             </Link>
           </p>
         </div>
+
+        <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Akun saya</p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">{publicUser.name}</p>
+              <p className="text-sm text-slate-400">{publicUser.email}</p>
+            </div>
+            <LogoutButton />
+          </div>
+        </section>
 
         <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
