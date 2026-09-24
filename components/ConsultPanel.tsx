@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Booking } from "@/lib/repo";
+import type { AdminBooking, Booking } from "@/lib/repo";
 
 declare global {
   interface Window {
@@ -48,11 +48,15 @@ export function ConsultPanel({
   provider,
   snapJsUrl,
   product,
+  isAdmin,
+  allBookings,
 }: {
   bookings: Booking[];
   provider: "mock" | "midtrans";
   snapJsUrl: string;
   product: { name: string; priceIdr: number };
+  isAdmin: boolean;
+  allBookings: AdminBooking[];
 }) {
   const router = useRouter();
   const [topic, setTopic] = useState("");
@@ -114,6 +118,28 @@ export function ConsultPanel({
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Simulasi gagal.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Koneksi ke server terputus.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function complete(bookingId: string) {
+    setBusy(bookingId);
+    setError("");
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "complete" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Gagal menandai selesai.");
         return;
       }
       router.refresh();
@@ -261,6 +287,50 @@ export function ConsultPanel({
           </ul>
         )}
       </section>
+
+      {isAdmin ? (
+        <section className="mt-10">
+          <h2 className="text-lg font-semibold">Semua booking (mentor)</h2>
+          {allBookings.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-400">
+              Belum ada booking dari user mana pun.
+            </p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {allBookings.map((booking) => (
+                <li
+                  key={booking.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-5 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">{booking.topic}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {booking.userEmail} · {booking.id} · {formatDate(booking.createdAt)}
+                      {booking.preferredDate ? ` · ingin: ${booking.preferredDate}` : ""}
+                      {booking.contact ? ` · kontak: ${booking.contact}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`rounded-full px-2.5 py-1 text-xs ${STATUS_STYLE[booking.status] ?? ""}`}>
+                      {STATUS_LABEL[booking.status] ?? booking.status}
+                    </span>
+                    {booking.status === "scheduled" ? (
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => complete(booking.id)}
+                        className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+                      >
+                        {busy === booking.id ? "Memproses..." : "Tandai selesai"}
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

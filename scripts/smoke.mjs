@@ -105,6 +105,7 @@ async function main() {
   fs.rmSync(`${DB_PATH}-wal`, { force: true });
   fs.rmSync(`${DB_PATH}-shm`, { force: true });
 
+  const email = `smoke_${Date.now()}@example.com`;
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], {
     env: {
       ...process.env,
@@ -113,6 +114,7 @@ async function main() {
       DATABASE_PATH: DB_PATH,
       FREE_MONTHLY_QUOTA: "2",
       AI_DEFAULT_MODEL: "mock/myprd-demo",
+      ADMIN_EMAILS: email,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -137,7 +139,6 @@ async function main() {
     check("API project tanpa login → 401", unauthed.status === 401, `status ${unauthed.status}`);
 
     section("2. Register & sesi");
-    const email = `smoke_${Date.now()}@example.com`;
     const register = await api("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({ email, password: "rahasia12345", name: "Smoke Tester" }),
@@ -346,6 +347,27 @@ async function main() {
     const konsulPage = await api("/konsultasi");
     check("halaman /konsultasi → 200", konsulPage.status === 200, `status ${konsulPage.status}`);
 
+    section("9b. Panel mentor: lihat semua booking + tandai selesai");
+    const adminList = await json(await api("/api/bookings?scope=all"));
+    check(
+      "admin melihat semua booking + email pemilik",
+      Array.isArray(adminList.bookings) &&
+        adminList.bookings.some((b) => b.id === bookingBody.booking?.id && b.userEmail === email),
+    );
+    const completeRes = await api(`/api/bookings/${bookingBody.booking?.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete" }),
+    });
+    const doneBody = await json(completeRes);
+    check("admin menandai selesai → done", completeRes.status === 200 && doneBody.booking?.status === "done");
+    const completeAgain = await api(`/api/bookings/${bookingBody.booking?.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete" }),
+    });
+    check("booking done tidak bisa diselesaikan ulang → 404", completeAgain.status === 404, `status ${completeAgain.status}`);
+
     section("10. Isolasi antar user & logout");
     const otherCookie = cookie;
     cookie = "";
@@ -356,6 +378,14 @@ async function main() {
     });
     const stolen = await api(`/api/projects/${projectId}`);
     check("user lain tidak bisa akses project → 404", stolen.status === 404, `status ${stolen.status}`);
+    const forbList = await api("/api/bookings?scope=all");
+    check("non-admin tidak bisa lihat semua booking → 403", forbList.status === 403, `status ${forbList.status}`);
+    const forbComplete = await api(`/api/bookings/${bookingBody.booking?.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "complete" }),
+    });
+    check("non-admin tidak bisa menandai selesai → 403", forbComplete.status === 403, `status ${forbComplete.status}`);
 
     cookie = otherCookie;
     const logout = await api("/api/auth/logout", { method: "POST" });

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { currentUser } from "@/lib/auth";
 import { billingProvider, CONSULT_PRODUCT, midtransSnapJsUrl } from "@/lib/billing";
-import { listBookings } from "@/lib/repo";
+import { isAdminEmail } from "@/lib/env";
+import { listAllBookings, listBookings } from "@/lib/repo";
 import { ConsultPanel } from "@/components/ConsultPanel";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 
@@ -45,6 +46,8 @@ export default async function KonsultasiPage() {
               provider={billingProvider()}
               snapJsUrl={midtransSnapJsUrl()}
               product={CONSULT_PRODUCT}
+              isAdmin={isAdminEmail(user.email)}
+              allBookings={isAdminEmail(user.email) ? listAllBookings() : []}
             />
           ) : (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-center">

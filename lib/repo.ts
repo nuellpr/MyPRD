@@ -433,6 +433,29 @@ export function listBookings(userId: string): Booking[] {
   return rows.map(toBooking);
 }
 
+export interface AdminBooking extends Booking {
+  userEmail: string;
+}
+
+/** Semua booking + email pemilik (khusus mentor/admin). */
+export function listAllBookings(limit = 100): AdminBooking[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT b.*, u.email AS user_email FROM bookings b JOIN users u ON u.id = b.user_id ORDER BY b.created_at DESC LIMIT ?",
+    )
+    .all(limit) as unknown as (BookingRow & { user_email: string })[];
+  return rows.map((row) => ({ ...toBooking(row), userEmail: row.user_email }));
+}
+
+/** Tandai booking terjadwal sebagai selesai (mentor; hanya dari status scheduled). */
+export function completeBooking(bookingId: string): Booking | null {
+  const row = getDb().prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId) as BookingRow | undefined;
+  if (!row || row.status !== "scheduled") return null;
+  getDb().prepare("UPDATE bookings SET status = 'done', updated_at = ? WHERE id = ?").run(Date.now(), bookingId);
+  const after = getDb().prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId) as BookingRow | undefined;
+  return after ? toBooking(after) : null;
+}
+
 export function linkBookingOrder(bookingId: string, orderId: string): void {
   getDb().prepare("UPDATE bookings SET order_id = ?, updated_at = ? WHERE id = ?").run(orderId, Date.now(), bookingId);
 }

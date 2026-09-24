@@ -1,17 +1,23 @@
 import { requireUser } from "@/lib/auth";
 import { billingProvider, CONSULT_PRODUCT, createSnapTransaction, midtransClientKey } from "@/lib/billing";
+import { isAdminEmail } from "@/lib/env";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { sanitizeUserText } from "@/lib/safety";
-import { createBooking, createOrder, linkBookingOrder, listBookings, setOrderProviderRef } from "@/lib/repo";
+import { createBooking, createOrder, linkBookingOrder, listAllBookings, listBookings, setOrderProviderRef } from "@/lib/repo";
 
 /**
  * Booking konsultasi 1 sesi (60 menit), bayar di muka.
  * POST body: { topic, contact?, preferredDate? } → booking `pending_payment`
- * + order konsultasi. GET → daftar booking user.
+ * + order konsultasi. GET → daftar booking user; GET?scope=all → semua
+ * booking + email pemilik (khusus mentor/admin).
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await requireUser();
+    if (new URL(request.url).searchParams.get("scope") === "all") {
+      if (!isAdminEmail(user.email)) return jsonError("Hanya mentor yang bisa melihat semua booking.", 403);
+      return jsonOk({ bookings: listAllBookings(), product: CONSULT_PRODUCT });
+    }
     return jsonOk({ bookings: listBookings(user.id), product: CONSULT_PRODUCT });
   } catch (error) {
     return errorToResponse(error);

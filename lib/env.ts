@@ -184,4 +184,19 @@ export function aiIdleTimeoutMs(): number {
   return Number.isFinite(raw) && raw >= 100 ? raw : 120_000;
 }
 
+/**
+ * Email mentor/admin (dipisah koma, case-insensitive).
+ * Admin bisa melihat semua booking konsultasi & menandainya selesai.
+ */
+export function adminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isAdminEmail(email: string): boolean {
+  return adminEmails().includes(email.trim().toLowerCase());
+}
+
 export const freeMonthlyQuota = Number(process.env.FREE_MONTHLY_QUOTA ?? 5);

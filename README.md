@@ -162,7 +162,7 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 
 - **Halaman `/konsultasi`** (publik, form butuh login): sesi 1-on-1 60 menit Rp199.000, bayar di muka. Isi topik + kontak + jadwal yang diinginkan → booking `pending_payment` + order konsultasi (`consult-60`).
 - Pembayaran menumpang alur billing yang sama (Snap/mock + webhook terverifikasi); saat lunas, booking otomatis jadi `scheduled` via `repo.confirmBookingPayment`. Order konsultasi **tidak mengubah paket langganan** user (guard di `markOrderPaid`).
-- Booking yang belum dibayar bisa dibatalkan user; status `done` dijadwalkan mentor manual (belum ada panel admin — langkah berikutnya).
+- Booking yang belum dibayar bisa dibatalkan user; mentor menandai selesai lewat panel admin di bawah daftar booking (butuh `ADMIN_EMAILS=kamu@gmail.com` di `.env.local`, aksi `Tandai selesai` hanya untuk status terjadwal).
 
 ### Keamanan & batasan
 
