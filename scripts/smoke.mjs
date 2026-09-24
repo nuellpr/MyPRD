@@ -255,6 +255,15 @@ async function main() {
     const badFormat = await api(`/api/projects/${projectId}/export?format=ngawur`);
     check("format export tidak dikenal → 400", badFormat.status === 400, `status ${badFormat.status}`);
 
+    const pdfFree = await api(`/api/projects/${projectId}/export?format=pdf`);
+    const pdfFreeBody = await json(pdfFree);
+    check("export pdf paket free → 402", pdfFree.status === 402, `status ${pdfFree.status}`);
+    check(
+      "pesan 402 menyebut Starter/Pro",
+      /starter/i.test(String(pdfFreeBody.error)) && /pro/i.test(String(pdfFreeBody.error)),
+      String(pdfFreeBody.error).slice(0, 80),
+    );
+
     section("7. Edit PRD & kuota habis");
     const edited = await api(`/api/projects/${projectId}/prd`, {
       method: "PUT",
@@ -302,6 +311,15 @@ async function main() {
     );
     const billingPage = await api("/billing");
     check("halaman /billing → 200", billingPage.status === 200, `status ${billingPage.status}`);
+    const pdfRes = await api(`/api/projects/${projectId}/export?format=pdf`);
+    const pdfBuf = Buffer.from(await pdfRes.arrayBuffer());
+    check(
+      "export pdf paket starter → 200 + application/pdf",
+      pdfRes.status === 200 && String(pdfRes.headers.get("content-type")).includes("application/pdf"),
+      `status ${pdfRes.status}`,
+    );
+    check("file PDF valid (header %PDF-)", pdfBuf.slice(0, 5).toString() === "%PDF-", pdfBuf.slice(0, 5).toString());
+    check("ukuran PDF wajar (> 2KB)", pdfBuf.length > 2000, `${pdfBuf.length} bytes`);
 
     section("9. Booking konsultasi: buat → bayar (mock) → terjadwal");
     const bookingEmpty = await api("/api/bookings", {

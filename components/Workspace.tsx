@@ -453,13 +453,22 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
               >
                 .md
               </a>
+              <a
+                href={`/api/projects/${project.id}/export?format=pdf`}
+                title="Unduh PDF (paket Starter/Pro)"
+                className={`rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 ${
+                  prd ? "" : "pointer-events-none opacity-40"
+                }`}
+              >
+                .pdf
+              </a>
               <button
                 type="button"
                 onClick={() => window.print()}
                 disabled={!prd}
                 className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 disabled:opacity-40"
               >
-                PDF
+                Cetak
               </button>
             </div>
           </header>

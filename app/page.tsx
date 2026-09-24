@@ -14,7 +14,7 @@ const STEPS = [
   },
   {
     title: "3. Review & export",
-    body: "Edit PRD di editor markdown, lalu export .md atau print ke PDF — plus task breakdown siap tempel ke Claude Code/Cursor.",
+    body: "Edit PRD di editor markdown, lalu export .md (atau .pdf untuk paket Starter/Pro) — plus task breakdown siap tempel ke Claude Code/Cursor.",
   },
 ];
 
@@ -65,7 +65,7 @@ const FAQ = [
   },
   {
     q: "Bisa export ke PDF?",
-    a: "Bisa. Halaman PRD punya tombol Cetak/PDF yang menghasilkan dokumen bersih tanpa elemen UI.",
+    a: "Bisa. Paket Starter/Pro punya tombol .pdf yang mengunduh PRD sebagai dokumen PDF rapi. Paket Free bisa memakai tombol Cetak di browser.",
   },
 ];
 

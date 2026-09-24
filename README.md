@@ -18,7 +18,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Peta visual PRD | ✅ | Tab **Peta**: fase otomatis dari dependensi task, badge kompleksitas S/M/L, penanda "Kunci", jalur kritis, dan daftar fitur dari PRD |
 | Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js, TanStack & FastAPI + prompt install sekali salin untuk AI agent |
 | Dictation ide | ✅ | Tombol mic di form ide (Web Speech API Bahasa Indonesia, tanpa server) |
-| Export | ✅ | Markdown, JSON, checklist task `.md`, task `.json`, dan print → PDF dari browser |
+| Export | ✅ | Markdown, JSON, checklist task `.md`/`.json`, PDF server (Starter/Pro), dan Cetak via browser |
 | Auth | ✅ | Email + password (scrypt) **dan login Google OAuth** (opsional, via `GOOGLE_CLIENT_ID`); sesi cookie httpOnly bertanda tangan HMAC |
 | Riwayat project | ✅ | Dashboard berisi daftar PRD dengan status & model terakhir |
 | Kuota free tier | ✅ | Dihitung dari usage per bulan, blokir 402 + pesan upgrade saat habis |
@@ -104,7 +104,7 @@ app/
   api/projects/[id]/chat/      POST → SSE streaming balasan AI
   api/projects/[id]/generate/  POST → SSE streaming PRD final (cek kuota)
   api/projects/[id]/prd/       GET/PUT simpan PRD hasil edit
-  api/projects/[id]/export/    download markdown/json/task
+  api/projects/[id]/export/    download markdown/json/task/pdf (pdf: Starter/Pro)
 components/                    UI (Workspace, MarkdownView, PricingCards, ...)
   DictationButton, CopyButton, PrdMap, NewProjectForm, ...
 lib/
@@ -113,6 +113,7 @@ lib/
   ai.ts          router multi-provider + provider mock streaming
   prd.ts         system prompt & helper parsing PRD
   tasks.ts       parser task breakdown + topological sort + export
+  pdf.ts         render PRD markdown → PDF A4 (pdf-lib, tanpa dependensi native)
   roadmap.ts     peta visual: fase dari dependensi, jalur kritis, daftar fitur
   db.ts          skema SQLite (node:sqlite)
   repo.ts        repository project/message/prd/usage/order/booking
@@ -132,7 +133,7 @@ proxy.ts                       proteksi route /dashboard (cek cookie)
 2. **Bikin PRD Baru** → isi ide + pilih model → project dibuat dengan status `chatting`. Ide yang kamu tulis langsung terkirim sebagai pesan pertama di chat (tidak perlu mengetik ulang).
 3. **Chat** (`/chat`, SSE) → AI mengajukan pertanyaan klarifikasi; saat informasi cukup ia menutup balasan dengan `[[SIAP_PRD]]` (marker dibuang sebelum ditampilkan). Tombol **Generate PRD** berubah hijau + badge "Siap disusun" muncul begitu AI menyatakan siap.
 4. **Generate PRD** (`/generate`, SSE) → kuota dicek lebih dulu, PRD disimpan terenkripsi, judul project otomatis diambil dari H1 PRD, status jadi `prd_ready`.
-5. **Review/edit** → simpan (versi naik) → **Export** markdown/JSON/PDF atau checklist task.
+5. **Review/edit** → simpan (versi naik) → **Export** markdown/JSON/checklist task, PDF server (paket Starter/Pro), atau Cetak via browser.
 6. **Peta** → tab visual yang menyusun task menjadi fase berdasarkan dependensi, menandai task "Kunci" (jalur kritis / membuka task lain) dan menampilkan jalur kritis yang harus dikerjakan berurutan. Dihitung lokal dari PRD, tanpa panggilan AI tambahan.
 
 ### Peta visual
