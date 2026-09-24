@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { NewProjectForm, type ModelOption } from "@/components/NewProjectForm";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser, toPublicUser } from "@/lib/auth";
+import { badgesForStats, getUserStats } from "@/lib/community";
 import { defaultModelId, getAvailableProviders } from "@/lib/env";
 import { getPlan } from "@/lib/plans";
 import { getQuotaState, listProjects } from "@/lib/repo";
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
     models: p.models.map((model) => ({ id: `${p.id}/${model}`, model })),
   }));
   const quotaPercent = quota.limit > 0 ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0;
+  const badges = badgesForStats(getUserStats(user.id));
 
   return (
     <div className="flex min-h-full flex-col">
@@ -102,7 +104,35 @@ export default async function DashboardPage() {
             >
               Gabung Discord →
             </a>
+            <br />
+            <Link href="/komunitas" className="mt-2 inline-block text-sm text-sky-400 hover:underline">
+              Papan peringkat →
+            </Link>
           </div>
+        </section>
+
+        <section className="mt-8">
+          <h2 className="text-lg font-semibold">Lencana saya</h2>
+          {badges.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">
+              Belum ada lencana — susun PRD pertamamu untuk meraih Perintis.{" "}
+              <Link href="/komunitas" className="text-sky-400 hover:underline">
+                Lihat semua lencana →
+              </Link>
+            </p>
+          ) : (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {badges.map((badge) => (
+                <li
+                  key={badge.id}
+                  title={badge.description}
+                  className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-sm text-amber-200"
+                >
+                  {badge.name}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="mt-8">

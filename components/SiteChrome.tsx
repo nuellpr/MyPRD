@@ -23,6 +23,9 @@ export function SiteHeader({ authed }: { authed: boolean }) {
           <Link href="/konsultasi" className="hover:text-white">
             Konsultasi
           </Link>
+          <Link href="/komunitas" className="hover:text-white">
+            Komunitas
+          </Link>
           <Link href="/#harga" className="hover:text-white">
             Harga
           </Link>

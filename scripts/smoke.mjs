@@ -364,6 +364,14 @@ async function main() {
     check("booking pending bisa dibatalkan", cancelRes.status === 200 && cancelResBody.booking?.status === "cancelled");
     const konsulPage = await api("/konsultasi");
     check("halaman /konsultasi → 200", konsulPage.status === 200, `status ${konsulPage.status}`);
+    const komunPage = await api("/komunitas");
+    const komunText = await komunPage.text();
+    check("halaman /komunitas → 200", komunPage.status === 200, `status ${komunPage.status}`);
+    check(
+      "leaderboard memuat user smoke + lencana",
+      komunText.includes("Smoke Tester") && komunText.includes("Papan peringkat"),
+      komunText.slice(0, 120),
+    );
 
     section("9b. Panel mentor: lihat semua booking + tandai selesai");
     const adminList = await json(await api("/api/bookings?scope=all"));
