@@ -16,6 +16,8 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Task breakdown untuk AI agent | ✅ | Format `- [ ] T1 — judul \| file: path \| depends: T0 \| kompleksitas: S/M/L`; parser + topological sort + export checklist/JSON |
 | Editor & preview PRD | ✅ | Edit markdown langsung, preview render (GFM), tombol Simpan |
 | Peta visual PRD | ✅ | Tab **Peta**: fase otomatis dari dependensi task, badge kompleksitas S/M/L, penanda "Kunci", jalur kritis, dan daftar fitur dari PRD |
+| Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js & TanStack + prompt install sekali salin untuk AI agent |
+| Dictation ide | ✅ | Tombol mic di form ide (Web Speech API Bahasa Indonesia, tanpa server) |
 | Export | ✅ | Markdown, JSON, checklist task `.md`, task `.json`, dan print → PDF dari browser |
 | Auth | ✅ | Email + password (scrypt), sesi cookie httpOnly bertanda tangan HMAC |
 | Riwayat project | ✅ | Dashboard berisi daftar PRD dengan status & model terakhir |
@@ -92,6 +94,7 @@ Biaya per 1 juta token tiap provider didefinisikan di `lib/env.ts` dan dipakai u
 app/
   page.tsx                     landing + pricing + FAQ
   login/, register/            autentikasi
+  templates/                   galeri template + halaman detail + prompt install
   dashboard/page.tsx           daftar project + sisa kuota
   dashboard/[id]/page.tsx      workspace: chat streaming + panel PRD
   api/auth/*                   register, login, logout, me
@@ -102,8 +105,10 @@ app/
   api/projects/[id]/prd/       GET/PUT simpan PRD hasil edit
   api/projects/[id]/export/    download markdown/json/task
 components/                    UI (Workspace, MarkdownView, PricingCards, ...)
+  DictationButton, CopyButton, PrdMap, NewProjectForm, ...
 lib/
   env.ts         katalog provider + konfigurasi
+  templates.ts   katalog template/starter kit (data statis) + prompt install
   ai.ts          router multi-provider + provider mock streaming
   prd.ts         system prompt & helper parsing PRD
   tasks.ts       parser task breakdown + topological sort + export
@@ -137,6 +142,11 @@ Tab **Peta** di workspace membaca bagian *Task Breakdown* lalu:
 - menampilkan chip **fitur utama** yang diambil dari bagian *Fitur Utama* di PRD.
 
 Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta selalu sinkron dengan PRD terakhir dan tidak menambah konsumsi kuota.
+
+### Template & dictation
+
+- **Template** (`/templates`, publik): katalog starter kit (saat ini Starter Next.js dan Starter TanStack — keduanya fullstack + PostgreSQL + Docker). Tiap template punya halaman detail berisi daftar isi, **prompt install** yang bisa disalin (tempel ke Claude Code/Cursor/OpenCode di folder kosong, agent yang men-scaffold codebase), langkah "Cara mulai", dan tombol **Bikin PRD dengan template** yang membuka form project baru dengan konteks tech stack terisi otomatis (`/dashboard?template=<slug>`).
+- **Dictation**: tombol 🎙 di form ide memakai Web Speech API (`id-ID`, gratis, tanpa server). Hasil ucapan final ditempel ke textarea; tombol tidak tampil kalau browser tidak mendukung.
 
 ### Keamanan & batasan
 

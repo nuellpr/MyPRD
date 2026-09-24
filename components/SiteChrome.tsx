@@ -17,6 +17,9 @@ export function SiteHeader({ authed }: { authed: boolean }) {
           <Link href="/#fitur" className="hover:text-white">
             Fitur
           </Link>
+          <Link href="/templates" className="hover:text-white">
+            Template
+          </Link>
           <Link href="/#harga" className="hover:text-white">
             Harga
           </Link>

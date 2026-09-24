@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { NewProjectForm, type ModelOption } from "@/components/NewProjectForm";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser, toPublicUser } from "@/lib/auth";
@@ -46,7 +47,7 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <section className="mt-6 grid gap-4 sm:grid-cols-3">
+        <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
             <p className="text-xs uppercase tracking-wide text-slate-500">Sisa kuota generate</p>
             <p className="mt-2 text-2xl font-semibold">
@@ -71,6 +72,14 @@ export default async function DashboardPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Template</p>
+            <p className="mt-2 text-sm text-slate-300">Starter kit siap pakai + prompt install untuk AI agent.</p>
+            <Link href="/templates" className="mt-3 inline-block text-sm text-sky-400 hover:underline">
+              Lihat template →
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
             <p className="text-xs uppercase tracking-wide text-slate-500">Komunitas</p>
             <p className="mt-2 text-sm text-slate-300">Diskusi, template, dan coaching bareng builder lain.</p>
             <a
@@ -85,7 +94,9 @@ export default async function DashboardPage() {
         </section>
 
         <section className="mt-8">
-          <NewProjectForm providers={providers} defaultModel={defaultModelId()} />
+          <Suspense>
+            <NewProjectForm providers={providers} defaultModel={defaultModelId()} />
+          </Suspense>
         </section>
 
         <section className="mt-10">

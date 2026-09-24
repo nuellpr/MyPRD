@@ -28,6 +28,11 @@ const FEATURES = [
     body: "Setiap task punya file yang disarankan, dependency, dan estimasi kompleksitas. Export sebagai markdown checklist atau JSON.",
   },
   {
+    title: "Template & starter kit",
+    body: "Salin prompt install template (Next.js / TanStack + PostgreSQL + Docker) ke Claude Code, Cursor, atau OpenCode — scaffold codebase production-ready tanpa mengetik perintah.",
+    href: "/templates",
+  },
+  {
     title: "Pilih model AI-mu",
     body: "Pakai OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, atau Groq — cukup isi API key di server, user tinggal pilih modelnya.",
   },
@@ -131,6 +136,11 @@ export default async function HomePage() {
                 <div key={feature.title} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6">
                   <h3 className="font-semibold">{feature.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
+                  {"href" in feature && typeof feature.href === "string" ? (
+                    <Link href={feature.href} className="mt-3 inline-block text-sm text-sky-400 hover:underline">
+                      Lihat template →
+                    </Link>
+                  ) : null}
                 </div>
               ))}
             </div>

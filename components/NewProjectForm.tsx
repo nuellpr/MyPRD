@@ -1,7 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { DictationButton } from "@/components/DictationButton";
+import { getTemplate } from "@/lib/templates";
 
 export interface ModelOption {
   id: string;
@@ -11,12 +13,33 @@ export interface ModelOption {
 
 export function NewProjectForm({ providers, defaultModel }: { providers: ModelOption[]; defaultModel: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [idea, setIdea] = useState("");
   const [modelId, setModelId] = useState(defaultModel);
   const [language, setLanguage] = useState<"id" | "en">("id");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  // Prefill dari ?template=<slug> (link "Bikin PRD dengan template").
+  // Dijadwalkan via setTimeout agar tidak setState sinkron di dalam effect.
+  useEffect(() => {
+    const slug = searchParams.get("template");
+    if (!slug) return;
+    const template = getTemplate(slug);
+    if (!template) return;
+    const timer = window.setTimeout(() => {
+      setTemplateName(template.name);
+      setIdea((current) => (current.trim() ? current : `${template.ideaContext}\n\nIde saya: `));
+      setOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [searchParams]);
+
+  function appendDictation(text: string) {
+    setIdea((current) => (current.trim() ? `${current.trim()} ${text}` : text));
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -65,8 +88,16 @@ export function NewProjectForm({ providers, defaultModel }: { providers: ModelOp
       </p>
 
       <label className="mt-4 block text-sm text-slate-300" htmlFor="idea">
-        Ide produk
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <span>Ide produk</span>
+          <DictationButton onText={appendDictation} />
+        </span>
       </label>
+      {templateName ? (
+        <p className="mt-1 text-xs text-sky-300">
+          Memakai template {templateName} — konteks tech stack sudah dimasukkan ke ide.
+        </p>
+      ) : null}
       <textarea
         id="idea"
         value={idea}
