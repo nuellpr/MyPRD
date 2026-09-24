@@ -16,7 +16,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Task breakdown untuk AI agent | ✅ | Format `- [ ] T1 — judul \| file: path \| depends: T0 \| kompleksitas: S/M/L`; parser + topological sort + export checklist/JSON |
 | Editor & preview PRD | ✅ | Edit markdown langsung, preview render (GFM), tombol Simpan |
 | Peta visual PRD | ✅ | Tab **Peta**: fase otomatis dari dependensi task, badge kompleksitas S/M/L, penanda "Kunci", jalur kritis, dan daftar fitur dari PRD |
-| Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js & TanStack + prompt install sekali salin untuk AI agent |
+| Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js, TanStack & FastAPI + prompt install sekali salin untuk AI agent |
 | Dictation ide | ✅ | Tombol mic di form ide (Web Speech API Bahasa Indonesia, tanpa server) |
 | Export | ✅ | Markdown, JSON, checklist task `.md`, task `.json`, dan print → PDF dari browser |
 | Auth | ✅ | Email + password (scrypt), sesi cookie httpOnly bertanda tangan HMAC |
@@ -145,7 +145,7 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 
 ### Template & dictation
 
-- **Template** (`/templates`, publik): katalog starter kit (saat ini Starter Next.js dan Starter TanStack — keduanya fullstack + PostgreSQL + Docker). Tiap template punya halaman detail berisi daftar isi, **prompt install** yang bisa disalin (tempel ke Claude Code/Cursor/OpenCode di folder kosong, agent yang men-scaffold codebase), langkah "Cara mulai", dan tombol **Bikin PRD dengan template** yang membuka form project baru dengan konteks tech stack terisi otomatis (`/dashboard?template=<slug>`).
+- **Template** (`/templates`, publik): katalog starter kit (saat ini Starter Next.js, Starter TanStack, dan Starter FastAPI — semuanya + PostgreSQL + Docker). Tiap template punya halaman detail berisi daftar isi, **prompt install** yang bisa disalin (tempel ke Claude Code/Cursor/OpenCode di folder kosong, agent yang men-scaffold codebase), langkah "Cara mulai", dan tombol **Bikin PRD dengan template** yang membuka form project baru dengan konteks tech stack terisi otomatis (`/dashboard?template=<slug>`).
 - **Dictation**: tombol 🎙 di form ide memakai Web Speech API (`id-ID`, gratis, tanpa server). Hasil ucapan final ditempel ke textarea; tombol tidak tampil kalau browser tidak mendukung.
 
 ### Keamanan & batasan

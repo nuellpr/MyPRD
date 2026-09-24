@@ -55,6 +55,23 @@ Ikuti best practice ini:
 
 Setelah selesai, tampilkan: struktur folder, cara menjalankan (dev + docker compose up), dan daftar route/API yang tersedia.`;
 
+const FASTAPI_INSTALL_PROMPT = `Siapkan starter project backend API di folder kosong ini dengan stack berikut:
+
+- Backend: FastAPI (Python, async, validasi request/response via Pydantic v2)
+- Runtime: Python 3.12 (venv + requirements yang terkunci versinya)
+- Database: PostgreSQL (jalan di Docker) + SQLAlchemy 2.0 async + Alembic migration
+- Auth: JWT access + refresh token, password hashing (bcrypt/argon2)
+- Deployment: Dockerfile multi-stage + docker-compose untuk Postgres
+
+Ikuti best practice ini:
+- Semua secret dan API key hanya lewat environment variable (.env), jangan hardcode
+- Validasi input di setiap trust boundary (request body, query param, webhook)
+- Rate limiting di route yang memanggil API berbayar/AI
+- Skema database dirancang sejak awal (tabel user dan contoh tabel domain)
+- Jangan install dependency yang tidak dipakai
+
+Setelah selesai, tampilkan: struktur folder, cara menjalankan (uvicorn + docker compose up), dan daftar endpoint API yang tersedia.`;
+
 const START_STEPS = [
   {
     title: "Siapkan komputermu (sekali saja)",
@@ -72,6 +89,14 @@ const START_STEPS = [
     title: "Lanjutkan dengan PRD",
     body: 'Setelah aplikasi berjalan, klik "Bikin PRD dengan template" agar PRD-mu memakai tech stack template ini.',
   },
+];
+
+const FASTAPI_STEPS = [
+  {
+    title: "Siapkan komputermu (sekali saja)",
+    body: "Install Python 3.12 dan Docker Desktop, lalu nyalakan Docker. Pakai AI coding agent favoritmu: Claude Code, Cursor, OpenCode, atau Codex.",
+  },
+  ...START_STEPS.slice(1),
 ];
 
 export const TEMPLATES: Template[] = [
@@ -124,6 +149,31 @@ export const TEMPLATES: Template[] = [
     installPrompt: TANSTACK_INSTALL_PROMPT,
     ideaContext:
       "Tech stack pilihan: TanStack Start (fullstack) + PostgreSQL + Docker (template Starter TanStack MyPRD).",
+  },
+  {
+    slug: "fastapi-starter",
+    name: "Starter FastAPI",
+    version: "0.1.0",
+    price: "Gratis",
+    tagline: "Template backend API FastAPI",
+    description:
+      "Kerangka backend API FastAPI + PostgreSQL yang siap production: auth JWT, migration Alembic, dan Docker. Pasangan ideal frontend Next.js/TanStack kalau backend Python yang kamu mau.",
+    stack: [
+      { category: "Backend", label: "FastAPI" },
+      { category: "Runtime", label: "Python" },
+      { category: "Database", label: "PostgreSQL" },
+      { category: "Deployment", label: "Docker" },
+    ],
+    includes: [
+      "Pola source code siap jalan (router + dependency injection + validasi Pydantic)",
+      "Skema database + sistem migration (SQLAlchemy 2.0 + Alembic)",
+      "Auth JWT access + refresh token",
+      "Contoh rate limiting dan config env yang aman",
+    ],
+    steps: FASTAPI_STEPS,
+    installPrompt: FASTAPI_INSTALL_PROMPT,
+    ideaContext:
+      "Tech stack pilihan: FastAPI (backend API) + PostgreSQL + Docker (template Starter FastAPI MyPRD).",
   },
 ];
 
