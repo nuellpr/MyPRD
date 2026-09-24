@@ -27,7 +27,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Monitoring biaya AI | ✅ | Tabel `usage_events` menyimpan token & estimasi biaya per request |
 | Billing (Midtrans) | ✅ | `/billing`: checkout Snap + webhook terverifikasi + mode simulasi mock tanpa merchant key |
 | Konsultasi & coaching | ✅ | `/konsultasi`: booking sesi 60 mnt Rp199rb bayar di muka, lunas → terjadwal otomatis |
-| Komunitas Discord / konsultasi | ⏳ Fase 3 | Link tersedia di footer |
+| Komunitas Discord / konsultasi | ✅ Booking + link Discord aktif | [Gabung Discord](https://discord.gg/w3pn2Ey3P) |
 
 ---
 

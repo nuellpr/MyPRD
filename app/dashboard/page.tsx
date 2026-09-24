@@ -95,7 +95,7 @@ export default async function DashboardPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">Komunitas</p>
             <p className="mt-2 text-sm text-slate-300">Diskusi, template, dan coaching bareng builder lain.</p>
             <a
-              href="https://discord.com"
+              href="https://discord.gg/w3pn2Ey3P"
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-block text-sm text-sky-400 hover:underline"

@@ -63,7 +63,7 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
         <p>© {new Date().getFullYear()} MyPRD — dibuat untuk developer Indonesia.</p>
         <p className="flex gap-4">
-          <a href="https://discord.com" target="_blank" rel="noreferrer" className="hover:text-white">
+          <a href="https://discord.gg/w3pn2Ey3P" target="_blank" rel="noreferrer" className="hover:text-white">
             Komunitas Discord
           </a>
           <a href="https://youtube.com" target="_blank" rel="noreferrer" className="hover:text-white">
