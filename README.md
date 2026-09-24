@@ -15,6 +15,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | PRD terstruktur 12 bagian | ✅ | Ringkasan, masalah, tujuan, target user, scope, fitur, user flow, non-fungsional, tech stack, acceptance criteria, task breakdown, pertanyaan terbuka |
 | Task breakdown untuk AI agent | ✅ | Format `- [ ] T1 — judul \| file: path \| depends: T0 \| kompleksitas: S/M/L`; parser + topological sort + export checklist/JSON |
 | Editor & preview PRD | ✅ | Edit markdown langsung, preview render (GFM), tombol Simpan |
+| Peta visual PRD | ✅ | Tab **Peta**: fase otomatis dari dependensi task, badge kompleksitas S/M/L, penanda "Kunci", jalur kritis, dan daftar fitur dari PRD |
 | Export | ✅ | Markdown, JSON, checklist task `.md`, task `.json`, dan print → PDF dari browser |
 | Auth | ✅ | Email + password (scrypt), sesi cookie httpOnly bertanda tangan HMAC |
 | Riwayat project | ✅ | Dashboard berisi daftar PRD dengan status & model terakhir |
@@ -106,6 +107,7 @@ lib/
   ai.ts          router multi-provider + provider mock streaming
   prd.ts         system prompt & helper parsing PRD
   tasks.ts       parser task breakdown + topological sort + export
+  roadmap.ts     peta visual: fase dari dependensi, jalur kritis, daftar fitur
   db.ts          skema SQLite (node:sqlite)
   repo.ts        repository project/message/prd/usage
   auth.ts        sesi & password
@@ -123,6 +125,18 @@ proxy.ts                       proteksi route /dashboard (cek cookie)
 3. **Chat** (`/chat`, SSE) → AI mengajukan pertanyaan klarifikasi; saat informasi cukup ia menutup balasan dengan `[[SIAP_PRD]]` (marker dibuang sebelum ditampilkan). Tombol **Generate PRD** berubah hijau + badge "Siap disusun" muncul begitu AI menyatakan siap.
 4. **Generate PRD** (`/generate`, SSE) → kuota dicek lebih dulu, PRD disimpan terenkripsi, judul project otomatis diambil dari H1 PRD, status jadi `prd_ready`.
 5. **Review/edit** → simpan (versi naik) → **Export** markdown/JSON/PDF atau checklist task.
+6. **Peta** → tab visual yang menyusun task menjadi fase berdasarkan dependensi, menandai task "Kunci" (jalur kritis / membuka task lain) dan menampilkan jalur kritis yang harus dikerjakan berurutan. Dihitung lokal dari PRD, tanpa panggilan AI tambahan.
+
+### Peta visual
+
+Tab **Peta** di workspace membaca bagian *Task Breakdown* lalu:
+
+- mengelompokkan task ke **fase** memakai level topologis (`depends`) — task tanpa dependensi jadi Fase 1, dst.;
+- menandai **Kunci** untuk task di **jalur kritis** (rantai dependensi terpanjang) atau task yang membuka ≥2 task lain;
+- menampilkan badge **kompleksitas S/M/L**, file yang disarankan, dan "menunggu T…" pada tiap kartu;
+- menampilkan chip **fitur utama** yang diambil dari bagian *Fitur Utama* di PRD.
+
+Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta selalu sinkron dengan PRD terakhir dan tidak menambah konsumsi kuota.
 
 ### Keamanan & batasan
 

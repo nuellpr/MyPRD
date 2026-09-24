@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { extractFeatureList } from "@/lib/roadmap";
+import { parseTasks, type ParsedTask } from "@/lib/tasks";
 import { MarkdownView } from "./MarkdownView";
+import { PrdMap } from "./PrdMap";
 import { useSse } from "./useSse";
 
 export interface WorkspaceMessage {
@@ -39,7 +42,7 @@ interface Props {
   models: { id: string; label: string; models: { id: string; model: string }[] }[];
 }
 
-type Tab = "preview" | "edit" | "tasks";
+type Tab = "preview" | "edit" | "tasks" | "map";
 
 /**
  * Penghitung detik untuk fase "model belum mengeluarkan token".
@@ -70,28 +73,13 @@ function ThinkingBubble({ label }: { label: string }) {
   );
 }
 
-function parseTasksFromMarkdown(markdown: string): { id: string; title: string; meta: string; done: boolean }[] {
-  const lines = markdown.split(/\r?\n/);
-  let inSection = false;
-  const tasks: { id: string; title: string; meta: string; done: boolean }[] = [];
-  for (const line of lines) {
-    if (/^#{1,4}\s*.*task breakdown/i.test(line)) {
-      inSection = true;
-      continue;
-    }
-    if (inSection && /^#{1,4}\s+/.test(line)) break;
-    if (!inSection) continue;
-    const match = line.match(/^\s*[-*]\s*\[( |x|X)\]\s*(.+)$/);
-    if (!match) continue;
-    const rest = match[2];
-    const idMatch = rest.match(/^(T\d+)\b\s*[—\-–:.]?\s*/i);
-    const id = idMatch ? idMatch[1].toUpperCase() : `T${tasks.length + 1}`;
-    const withoutId = idMatch ? rest.slice(idMatch[0].length) : rest;
-    const parts = withoutId.split("|").map((p) => p.trim());
-    const title = parts.shift() ?? withoutId;
-    tasks.push({ id, title, meta: parts.join(" · "), done: match[1].toLowerCase() === "x" });
-  }
-  return tasks;
+/** Ringkasan metadata task untuk ditampilkan di tab Task. */
+function taskMeta(task: ParsedTask): string {
+  const parts: string[] = [];
+  if (task.files.length) parts.push(`file: ${task.files.join(", ")}`);
+  if (task.depends.length) parts.push(`depends: ${task.depends.join(", ")}`);
+  if (task.complexity !== "?") parts.push(`kompleksitas: ${task.complexity}`);
+  return parts.join(" · ");
 }
 
 export function Workspace({ project, initialMessages, initialPrd, quota, models }: Props) {
@@ -115,7 +103,8 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const autoSentRef = useRef(false);
-  const tasks = useMemo(() => parseTasksFromMarkdown(prd), [prd]);
+  const tasks = useMemo(() => parseTasks(prd), [prd]);
+  const features = useMemo(() => extractFeatureList(prd), [prd]);
   const doneCount = tasks.filter((t) => t.done).length;
 
   useEffect(() => {
@@ -432,6 +421,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                   ["preview", "Preview"],
                   ["edit", "Editor"],
                   ["tasks", `Task (${tasks.length})`],
+                  ["map", "Peta"],
                 ] as [Tab, string][]
               ).map(([value, label]) => (
                 <button
@@ -506,6 +496,8 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                 className="h-full w-full resize-none rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-200 outline-none focus:border-sky-500"
                 spellCheck={false}
               />
+            ) : tab === "map" ? (
+              <PrdMap tasks={tasks} features={features} projectTitle={title} />
             ) : (
               <div>
                 {tasks.length === 0 ? (
@@ -547,7 +539,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                               {task.title}
                             </p>
                           </div>
-                          {task.meta ? <p className="mt-2 text-xs text-slate-500">{task.meta}</p> : null}
+                          {taskMeta(task) ? <p className="mt-2 text-xs text-slate-500">{taskMeta(task)}</p> : null}
                         </li>
                       ))}
                     </ul>
