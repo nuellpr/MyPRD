@@ -9,7 +9,7 @@
  * respons PRD yang wajar (deterministik, tanpa jaringan) supaya aplikasi bisa
  * dicoba dan dites end-to-end tanpa kredensial.
  */
-import { findProvider, parseModelId, type ProviderConfig } from "./env.ts";
+import { findProvider, parseModelId, aiIdleTimeoutMs, type ProviderConfig } from "./env.ts";
 import { estimateTokens } from "./plans.ts";
 
 export interface ChatMessage {
@@ -43,6 +43,18 @@ export class ModelError extends Error {
     super(message);
     this.name = "ModelError";
     this.status = status;
+  }
+}
+
+/**
+ * Error khusus saat provider berhenti mengirim data tanpa menutup koneksi.
+ * Dibedakan dari ModelError biasa supaya route bisa menyelamatkan teks yang
+ * sudah diterima (parsial) daripada membuang semuanya.
+ */
+export class StreamStalledError extends ModelError {
+  constructor(message = "Model berhenti mengirim data (koneksi macet).") {
+    super(message, 504);
+    this.name = "StreamStalledError";
   }
 }
 
@@ -200,25 +212,52 @@ async function* openAiCompatibleStream(
   options: StreamOptions,
   onUsage: (usage: StreamUsage) => void,
 ): AsyncIterable<string> {
-  const res = await fetch(`${provider.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${provider.apiKey}`,
-      ...(provider.id === "openrouter" ? { "HTTP-Referer": "https://myprd.local", "X-Title": "MyPRD" } : {}),
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: true,
-      temperature: options.temperature ?? 0.6,
-      max_tokens: options.maxOutputTokens ?? 3000,
-      stream_options: { include_usage: true },
-    }),
-    signal: options.signal,
-  });
+  // Watchdog diam: kalau provider berhenti mengirim data di tengah stream,
+  // batalkan request supaya route bisa menyelamatkan teks parsial alih-alih
+  // menunggu timeout bawaan fetch (300 detik) lalu membuang semuanya.
+  const idleMs = aiIdleTimeoutMs();
+  const idleController = new AbortController();
+  const combinedSignal = options.signal
+    ? AbortSignal.any([options.signal, idleController.signal])
+    : idleController.signal;
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const resetIdle = () => {
+    if (idleTimer !== undefined) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => idleController.abort(), idleMs);
+  };
+  const clearIdle = () => {
+    if (idleTimer !== undefined) clearTimeout(idleTimer);
+    idleTimer = undefined;
+  };
+  resetIdle();
+
+  let res: Response;
+  try {
+    res = await fetch(`${provider.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${provider.apiKey}`,
+        ...(provider.id === "openrouter" ? { "HTTP-Referer": "https://myprd.local", "X-Title": "MyPRD" } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        temperature: options.temperature ?? 0.6,
+        max_tokens: options.maxOutputTokens ?? 3000,
+        stream_options: { include_usage: true },
+      }),
+      signal: combinedSignal,
+    });
+  } catch (error) {
+    clearIdle();
+    if (idleController.signal.aborted && !options.signal?.aborted) throw new StreamStalledError();
+    throw error;
+  }
 
   if (!res.ok || !res.body) {
+    clearIdle();
     const detail = await res.text().catch(() => "");
     throw new ModelError(`Provider ${provider.id} gagal (${res.status}): ${detail.slice(0, 300) || res.statusText}`, 502);
   }
@@ -230,9 +269,18 @@ async function* openAiCompatibleStream(
   const reader = res.body.getReader();
   try {
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch (error) {
+        // Abort dari watchdog ≠ error jaringan biasa: tandai supaya route tahu
+        // teks yang sudah diterima masih layak disimpan.
+        if (idleController.signal.aborted && !options.signal?.aborted) throw new StreamStalledError();
+        throw error;
+      }
+      resetIdle();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
       for (const raw of lines) {
@@ -261,6 +309,7 @@ async function* openAiCompatibleStream(
       }
     }
   } finally {
+    clearIdle();
     reader.releaseLock();
   }
 }
@@ -289,26 +338,27 @@ export function streamChat(options: StreamOptions): StreamResult {
     return { stream, usage };
   }
 
-  let usageReported = false;
+  let latestUsage: StreamUsage | null = null;
   const stream = (async function* () {
     let output = "";
     try {
       for await (const chunk of openAiCompatibleStream(provider, model, options.messages, options, (u) => {
-        usageReported = true;
-        resolveUsage(u);
+        // Sebagian provider (mis. Gemini) mengirim usage kumulatif di setiap
+        // chunk, jadi simpan snapshot terakhir dan pakai saat stream selesai.
+        latestUsage = u;
       })) {
         output += chunk;
         yield chunk;
       }
     } finally {
-      if (!usageReported) {
-        resolveUsage({
+      resolveUsage(
+        latestUsage ?? {
           tokensIn: options.messages.reduce((sum, m) => sum + estimateTokens(m.content), 0),
           tokensOut: estimateTokens(output),
           provider: provider.id,
           model,
-        });
-      }
+        },
+      );
     }
   })();
 

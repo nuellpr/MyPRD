@@ -41,6 +41,35 @@ interface Props {
 
 type Tab = "preview" | "edit" | "tasks";
 
+/**
+ * Penghitung detik untuk fase "model belum mengeluarkan token".
+ * Provider seperti Gemini bisa butuh puluhan detik untuk prompt PRD besar,
+ * jadi user perlu melihat bahwa proses masih berjalan.
+ */
+function ElapsedTimer() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <span className="tabular-nums">{seconds}s</span>;
+}
+
+function ThinkingBubble({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-slate-400">
+      <span className="flex gap-1">
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:300ms]" />
+      </span>
+      <span>
+        {label} (<ElapsedTimer />)
+      </span>
+    </div>
+  );
+}
+
 function parseTasksFromMarkdown(markdown: string): { id: string; title: string; meta: string; done: boolean }[] {
   const lines = markdown.split(/\r?\n/);
   let inSection = false;
@@ -73,6 +102,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
   const [draft, setDraft] = useState("");
   const [streamText, setStreamText] = useState("");
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const [prd, setPrd] = useState(initialPrd ?? "");
   const [tab, setTab] = useState<Tab>(initialPrd ? "preview" : "preview");
   const [quotaState, setQuotaState] = useState(quota);
@@ -96,6 +126,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
     const text = raw.trim();
     if (!text || streaming || generating) return;
     setError("");
+    setWarning("");
     setMessages((prev) => [...prev, { id: `local_${Date.now()}`, role: "user", content: text, createdAt: Date.now() }]);
     setStreamText("");
 
@@ -120,6 +151,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
           ]);
           setStreamText("");
           if (data.readyForPrd) setReadyForPrd(true);
+          if (typeof data.warning === "string") setWarning(data.warning);
         },
         onError: (message) => {
           setStreamText("");
@@ -153,6 +185,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
   async function generatePrd() {
     if (generating || streaming) return;
     setError("");
+    setWarning("");
     setGenerating(true);
     setTab("preview");
     setStreamText("");
@@ -178,6 +211,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
             setQuotaState(q);
           }
           setStreamText("");
+          if (typeof data.warning === "string") setWarning(data.warning);
           router.refresh();
         },
         onError: (message) => {
@@ -279,6 +313,12 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
         </p>
       ) : null}
 
+      {warning ? (
+        <p className="no-print mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          {warning}
+        </p>
+      ) : null}
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {/* Panel chat */}
         <section className="no-print flex h-[calc(100vh-13rem)] flex-col rounded-2xl border border-slate-800 bg-slate-900/40">
@@ -328,6 +368,10 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                   <MarkdownView content={streamText.replace(/\[\[SIAP_PRD\]\]/g, "")} />
                   <span className="mt-1 inline-block h-3 w-1.5 animate-pulse bg-sky-400 align-middle" />
                 </div>
+              </div>
+            ) : streaming ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5">
+                <ThinkingBubble label="Model sedang menyiapkan balasan" />
               </div>
             ) : null}
             <div ref={chatEndRef} />
@@ -432,7 +476,13 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
 
           <div className="print-area flex-1 overflow-y-auto px-5 py-4">
             {generating || (streaming && !prd) ? (
-              <MarkdownView content={streamText || "_Menyusun PRD..._"} />
+              streamText ? (
+                <MarkdownView content={streamText} />
+              ) : (
+                <div className="grid h-full place-items-center">
+                  <ThinkingBubble label="Menyusun PRD lengkap" />
+                </div>
+              )
             ) : !prd ? (
               <div className="grid h-full place-items-center text-center">
                 <div className="max-w-sm text-sm text-slate-400">

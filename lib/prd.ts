@@ -40,6 +40,7 @@ export function chatSystemPrompt(language: Language): string {
     "3. Kalau jawaban user sudah cukup (minimal: masalah, target user, 2-3 fitur inti, batasan), akhiri balasan dengan baris tepat: [[SIAP_PRD]]",
     "4. Jangan mengarang detail teknis yang tidak disebutkan user — tanyakan.",
     "5. Bahasa santai tapi profesional, tanpa basa-basi panjang.",
+    "6. Setelah user menjawab pertanyaanmu minimal sekali, anggap informasi sudah cukup: ringkas pemahamanmu lalu akhiri dengan baris [[SIAP_PRD]]. Jangan bertanya lebih dari dua putaran.",
     "",
     "Format balasan saat bertanya: ringkas 1 kalimat pemahamanmu, lalu daftar bernomor pertanyaan.",
   ].join("\n");
@@ -53,6 +54,7 @@ export function generateSystemPrompt(language: Language): string {
     "",
     "SYARAT OUTPUT:",
     "- Output HANYA markdown PRD, tanpa pembuka/penutup, tanpa code fence pembungkus.",
+    "- Mulai dengan heading H1 berisi judul produk: `# PRD: <judul singkat produk>`.",
     `- Gunakan tepat bagian berikut, dengan heading level 2: ${PRD_SECTIONS.map((s) => `## ${s}`).join(" | ")}`,
     "- Bagian 'Fitur Utama': setiap fitur punya deskripsi, alur singkat, dan kriteria selesai yang bisa diverifikasi (bullet list).",
     "- Bagian 'Task Breakdown untuk AI Coding Agent': daftar task granular dalam format:",
@@ -74,20 +76,27 @@ export interface BuildMessagesInput {
 export function buildMessages({ language, history, idea, mode }: BuildMessagesInput): ChatMessage[] {
   const system = mode === "generate" ? generateSystemPrompt(language) : chatSystemPrompt(language);
   const messages: ChatMessage[] = [{ role: "system", content: system }];
-  if (idea && mode === "chat") {
-    messages.push({ role: "user", content: `Ide produk saya: ${idea}` });
-  }
-  if (idea && mode === "generate") {
+  if (idea) {
     // Ide asli selalu jadi konteks pertama supaya judul & isi PRD tidak bergeser
     // ke topik jawaban klarifikasi terakhir.
-    messages.push({ role: "user", content: `Ide produk awal dari user: ${idea}` });
+    messages.push({
+      role: "user",
+      content: mode === "generate" ? `Ide produk awal dari user: ${idea}` : `Ide produk saya: ${idea}`,
+    });
   }
   for (const m of history) {
     if (m.role === "system") continue;
     messages.push(m);
   }
-  if (mode === "generate" && history.length === 0 && !idea) {
-    messages.push({ role: "user", content: "Susun PRD dari ide berikut: " + (idea ?? "") });
+  if (mode === "generate") {
+    // Sebagian provider (mis. Gemini) menolak request yang berakhir dengan
+    // giliran model: "Requests ending with a model turn are not supported".
+    // Karena itu percakapan selalu ditutup instruksi user yang eksplisit.
+    messages.push({
+      role: "user",
+      content:
+        "Susun PRD final sekarang berdasarkan ide dan percakapan di atas. Keluarkan hanya markdown PRD sesuai format, tanpa kalimat pembuka atau penutup.",
+    });
   }
   return messages;
 }
@@ -101,6 +110,39 @@ export function stripMarkers(text: string): string {
   return text.replace(/\[\[SIAP_PRD\]\]/g, "").trim();
 }
 
+/**
+ * Filter streaming untuk marker internal: menahan ekor teks yang mungkin
+ * bagian dari `[[SIAP_PRD]]` supaya marker tidak pernah sampai ke klien,
+ * termasuk saat terbagi antar chunk (`[[SIAP` + `_PRD]]`).
+ *
+ * Pakai `push()` untuk setiap delta lalu `flush()` di akhir stream.
+ */
+export function createMarkerFilter(marker = "[[SIAP_PRD]]") {
+  let pending = "";
+  const maxHold = marker.length - 1;
+
+  return {
+    push(chunk: string): string {
+      const combined = (pending + chunk).replaceAll(marker, "");
+      let hold = 0;
+      const limit = Math.min(maxHold, combined.length);
+      for (let len = limit; len > 0; len -= 1) {
+        if (marker.startsWith(combined.slice(-len))) {
+          hold = len;
+          break;
+        }
+      }
+      pending = hold > 0 ? combined.slice(-hold) : "";
+      return hold > 0 ? combined.slice(0, -hold) : combined;
+    },
+    flush(): string {
+      const rest = pending.replaceAll(marker, "");
+      pending = "";
+      return rest;
+    },
+  };
+}
+
 /** Bersihkan output PRD dari pembungkus code fence yang kadang ikut terkirim. */
 export function cleanPrdMarkdown(text: string): string {
   let out = text.trim();
@@ -110,13 +152,29 @@ export function cleanPrdMarkdown(text: string): string {
   return out;
 }
 
+/** Potong judul di batas kata supaya tidak terputus di tengah kata. */
+function truncateTitle(text: string, max = 80): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut).trim();
+}
+
 /** Hitung judul otomatis dari PRD (untuk nama project). */
 export function deriveTitleFromPrd(markdown: string, fallback: string): string {
   const h1 = markdown.match(/^#\s+(.+)$/m);
-  if (h1) return h1[1].replace(/^PRD[:\-\s]*/i, "").trim().slice(0, 80) || fallback;
+  if (h1) return truncateTitle(h1[1].replace(/^PRD[:\-\s]*/i, "")) || fallback;
+  // Tanpa H1: pakai kalimat pertama dari Ringkasan Produk supaya judul tidak
+  // terpotong di tengah kalimat.
   const summary = markdown.match(/^##\s+1?\.?\s*Ringkasan Produk\s*\n+([^\n#]+)/m);
-  if (summary) return summary[1].trim().slice(0, 80);
-  return fallback.slice(0, 80) || "PRD tanpa judul";
+  if (summary) {
+    const firstLine = summary[1].trim();
+    const sentence = firstLine.split(/(?<=[.!?])\s/)[0] ?? firstLine;
+    const title = sentence.length >= 12 ? sentence : firstLine;
+    return truncateTitle(title) || fallback;
+  }
+  return truncateTitle(fallback) || "PRD tanpa judul";
 }
 
 /** Cek apakah markdown punya struktur PRD minimal. */

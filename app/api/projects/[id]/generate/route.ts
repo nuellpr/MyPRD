@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
-import { streamChat } from "@/lib/ai";
+import { StreamStalledError, streamChat } from "@/lib/ai";
 import { findProvider, parseModelId } from "@/lib/env";
 import { errorToResponse, SSE_HEADERS, sseEvent, toReadableStream } from "@/lib/http";
 import { AI_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
-import { buildMessages, cleanPrdMarkdown, deriveTitleFromPrd, type Language } from "@/lib/prd";
+import { buildMessages, cleanPrdMarkdown, deriveTitleFromPrd, looksLikePrd, type Language } from "@/lib/prd";
 import { estimateCostUsd } from "@/lib/plans";
 import { addMessage, getProject, getQuotaState, listMessages, recordUsage, savePrd, touchProject, updateProject } from "@/lib/repo";
+import { withHeartbeat } from "@/lib/sse-heartbeat";
 import type { ChatMessage } from "@/lib/ai";
 
 type Context = { params: Promise<{ id: string }> };
@@ -56,22 +57,40 @@ export async function POST(_request: Request, { params }: Context) {
     const encoder = (async function* () {
       yield sseEvent({ type: "start", modelId: project.modelId, quota });
       let output = "";
+      let stalled = false;
       try {
-        for await (const delta of stream) {
-          output += delta;
-          yield sseEvent({ type: "delta", text: delta });
+        for await (const item of withHeartbeat(stream)) {
+          if (item.kind === "ping") {
+            yield sseEvent({ type: "ping", at: Date.now() });
+            continue;
+          }
+          output += item.value;
+          yield sseEvent({ type: "delta", text: item.value });
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Gagal menghubungi model AI.";
-        yield sseEvent({ type: "error", message });
-        return;
+        // Provider free tier kadang berhenti di tengah stream. Kalau teks yang
+        // sudah diterima sudah berbentuk PRD, simpan sebagai draf parsial
+        // daripada membuang semuanya (user bisa Generate ulang untuk melengkapi).
+        if (error instanceof StreamStalledError && looksLikePrd(cleanPrdMarkdown(output))) {
+          stalled = true;
+        } else {
+          const message = error instanceof Error ? error.message : "Gagal menghubungi model AI.";
+          yield sseEvent({ type: "error", message });
+          return;
+        }
       }
 
       const markdown = cleanPrdMarkdown(output);
       const prd = savePrd(project.id, markdown);
       const title = deriveTitleFromPrd(markdown, project.idea || project.title);
       updateProject(user.id, project.id, { title, status: "prd_ready" });
-      addMessage(project.id, "assistant", "PRD berhasil disusun. Silakan review di panel PRD.");
+      addMessage(
+        project.id,
+        "assistant",
+        stalled
+          ? "PRD tersimpan sebagian (koneksi model terputus di tengah proses). Silakan review, lalu tekan Generate PRD lagi untuk melengkapi."
+          : "PRD berhasil disusun. Silakan review di panel PRD.",
+      );
       touchProject(project.id);
 
       const u = await usage;
@@ -93,6 +112,9 @@ export async function POST(_request: Request, { params }: Context) {
         prd,
         quota: getQuotaState(user.id, user.plan),
         usage: { tokensIn: u.tokensIn, tokensOut: u.tokensOut },
+        ...(stalled
+          ? { partial: true, warning: "Model berhenti di tengah proses, jadi PRD ini mungkin belum lengkap. Tekan Generate PRD lagi untuk menyelesaikannya." }
+          : {}),
       });
     })();
 

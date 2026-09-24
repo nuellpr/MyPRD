@@ -11,7 +11,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Fitur | Status | Catatan |
 |---|---|---|
 | Generator PRD via AI chat | ✅ | AI **bertanya dulu** (maks 3 pertanyaan klarifikasi) sebelum menyusun PRD — tidak menebak |
-| Multi-model AI | ✅ | Router OpenAI-compatible: OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, Groq, custom. Plus provider **mock** untuk demo tanpa API key |
+| Multi-model AI | ✅ | Router OpenAI-compatible: **Google Gemini**, OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, Groq, custom. Plus provider **mock** untuk demo tanpa API key |
 | PRD terstruktur 12 bagian | ✅ | Ringkasan, masalah, tujuan, target user, scope, fitur, user flow, non-fungsional, tech stack, acceptance criteria, task breakdown, pertanyaan terbuka |
 | Task breakdown untuk AI agent | ✅ | Format `- [ ] T1 — judul \| file: path \| depends: T0 \| kompleksitas: S/M/L`; parser + topological sort + export checklist/JSON |
 | Editor & preview PRD | ✅ | Edit markdown langsung, preview render (GFM), tombol Simpan |
@@ -60,14 +60,26 @@ npm run lint       # eslint
 
 ## Konfigurasi AI
 
-Format model: `provider/model`, contoh `deepseek/deepseek-chat`. Isi API key di `.env.local`; provider tanpa key otomatis disembunyikan dari pemilihan model.
+Format model: `provider/model`, contoh `gemini/gemini-3.5-flash-lite`. Isi API key di `.env.local`; provider tanpa key otomatis disembunyikan dari pemilihan model.
 
 ```env
-DEEPSEEK_API_KEY=sk-...
-AI_DEFAULT_MODEL=deepseek/deepseek-chat
+GEMINI_API_KEY=AIza...
+AI_DEFAULT_MODEL=gemini/gemini-3.5-flash-lite
 ```
 
-Provider yang didukung: `openai`, `openrouter`, `deepseek`, `kimi`, `qwen`, `groq`, dan `custom` (OpenAI-compatible apa pun lewat `CUSTOM_BASE_URL`). Semua lewat endpoint `POST {baseUrl}/chat/completions` dengan `stream: true`.
+Provider yang didukung: `gemini`, `openai`, `openrouter`, `deepseek`, `kimi`, `qwen`, `groq`, dan `custom` (OpenAI-compatible apa pun lewat `CUSTOM_BASE_URL`). Semua lewat endpoint `POST {baseUrl}/chat/completions` dengan `stream: true`.
+
+### Google Gemini
+
+Gemini dipakai lewat **endpoint OpenAI-compatible resmi** Google (`https://generativelanguage.googleapis.com/v1beta/openai`), jadi tidak ada SDK tambahan. Ambil API key gratis di [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+
+```env
+GEMINI_API_KEY=AIza...
+GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash
+AI_DEFAULT_MODEL=gemini/gemini-3.5-flash-lite
+```
+
+Alias `GOOGLE_API_KEY` dan `GEMINI` juga dikenali. Model `gemini-3.5-flash-lite` cocok untuk kuota free tier (cepat + murah: ~$0.30/1M token input, ~$2.50/1M output); pakai `gemini-3.5-flash` bila butuh kualitas lebih tinggi.
 
 Biaya per 1 juta token tiap provider didefinisikan di `lib/env.ts` dan dipakai untuk estimasi biaya di `usage_events`.
 
@@ -119,6 +131,14 @@ proxy.ts                       proteksi route /dashboard (cek cookie)
 - **Rate limit**: AI 20 req/menit per user, auth 10 percobaan/5 menit per IP. In-memory (single node) — ganti ke Redis untuk scale horizontal.
 - **Otorisasi**: semua query project selalu di-scope `user_id`, jadi user lain tidak bisa membaca project orang lain.
 - **APP_SECRET wajib** minimal 16 karakter di production (aplikasi menolak start kalau kosong).
+
+### Ketahanan streaming (provider free tier)
+
+Provider seperti Gemini free tier kadang butuh waktu lama sebelum token pertama, atau berhenti di tengah stream tanpa menutup koneksi. Yang dilakukan aplikasi:
+
+- **Heartbeat SSE**: event `{type:"ping"}` dikirim tiap 10 detik selama model belum mengeluarkan token, sehingga koneksi tidak diputus proxy/browser. UI menampilkan indikator "Model sedang menyiapkan balasan" beserta hitungan detik.
+- **Watchdog diam** (`AI_IDLE_TIMEOUT_MS`, default 120 detik): kalau provider tidak mengirim data selama itu, request dibatalkan.
+- **Draf parsial disimpan**: kalau PRD/balasan yang sudah diterima berbentuk substansial, hasilnya tetap disimpan sebagai draf + pesan peringatan di UI (kuota tetap terhitung), sehingga user tinggal menekan Generate PRD lagi untuk melengkapi. Sebelumnya hasil parsial dibuang dan menunggu timeout 300 detik.
 
 ---
 

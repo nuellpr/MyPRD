@@ -1,12 +1,13 @@
 import { requireUser } from "@/lib/auth";
-import { streamChat } from "@/lib/ai";
+import { StreamStalledError, streamChat } from "@/lib/ai";
 import { errorToResponse, SSE_HEADERS, sseEvent, toReadableStream } from "@/lib/http";
 import { AI_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
-import { buildMessages, isReadyForPrd, stripMarkers, type Language } from "@/lib/prd";
+import { buildMessages, createMarkerFilter, isReadyForPrd, stripMarkers, type Language } from "@/lib/prd";
 import { addMessage, getProject, listMessages, recordUsage, touchProject } from "@/lib/repo";
 import { estimateCostUsd } from "@/lib/plans";
 import { findProvider, parseModelId } from "@/lib/env";
 import { MAX_USER_MESSAGE_CHARS, sanitizeUserText, wrapUserContent } from "@/lib/safety";
+import { withHeartbeat } from "@/lib/sse-heartbeat";
 import type { ChatMessage } from "@/lib/ai";
 
 type Context = { params: Promise<{ id: string }> };
@@ -15,7 +16,10 @@ type Context = { params: Promise<{ id: string }> };
  * POST /api/projects/:id/chat — streaming balasan AI (SSE).
  *
  * Event yang dikirim:
- *   {type:"start"} · {type:"delta",text} · {type:"done",...} · {type:"error",message}
+ *   {type:"start"} · {type:"delta",text} · {type:"ping"} · {type:"done",...} · {type:"error",message}
+ *
+ * Event `ping` dikirim berkala saat model belum mengeluarkan token, supaya
+ * koneksi tidak diputus saat TTFT panjang.
  */
 export async function POST(request: Request, { params }: Context) {
   try {
@@ -51,15 +55,35 @@ export async function POST(request: Request, { params }: Context) {
     const encoder = (async function* () {
       yield sseEvent({ type: "start", modelId: project.modelId });
       let output = "";
+      let stalled = false;
+      // Marker [[SIAP_PRD]] ditahan di server supaya tidak pernah sampai ke UI,
+      // termasuk saat terbagi antar chunk.
+      const filter = createMarkerFilter();
       try {
-        for await (const delta of stream) {
+        for await (const item of withHeartbeat(stream)) {
+          if (item.kind === "ping") {
+            yield sseEvent({ type: "ping", at: Date.now() });
+            continue;
+          }
+          const delta = item.value;
           output += delta;
-          yield sseEvent({ type: "delta", text: delta });
+          const visible = filter.push(delta);
+          if (visible) yield sseEvent({ type: "delta", text: visible });
         }
+        const tail = filter.flush();
+        if (tail) yield sseEvent({ type: "delta", text: tail });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Gagal menghubungi model AI.";
-        yield sseEvent({ type: "error", message });
-        return;
+        // Provider free tier kadang berhenti di tengah balasan. Kalau sudah ada
+        // teks, simpan sebagai pesan parsial supaya percakapan tidak hilang.
+        if (error instanceof StreamStalledError && output.trim().length > 0) {
+          stalled = true;
+          const tail = filter.flush();
+          if (tail) yield sseEvent({ type: "delta", text: tail });
+        } else {
+          const message = error instanceof Error ? error.message : "Gagal menghubungi model AI.";
+          yield sseEvent({ type: "error", message });
+          return;
+        }
       }
 
       const cleaned = stripMarkers(output);
@@ -86,6 +110,9 @@ export async function POST(request: Request, { params }: Context) {
         messageId: saved.id,
         readyForPrd,
         usage: { tokensIn: u.tokensIn, tokensOut: u.tokensOut },
+        ...(stalled
+          ? { partial: true, warning: "Koneksi model terputus, jadi balasan ini mungkin belum selesai. Kirim pesan lagi untuk melanjutkan." }
+          : {}),
       });
     })();
 

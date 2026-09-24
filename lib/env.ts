@@ -5,7 +5,7 @@
  * mudah dilacak dan ada default yang aman untuk development.
  */
 
-export type ProviderId = "mock" | "openai" | "openrouter" | "deepseek" | "kimi" | "qwen" | "groq" | "custom";
+export type ProviderId = "mock" | "gemini" | "openai" | "openrouter" | "deepseek" | "kimi" | "qwen" | "groq" | "custom";
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -43,6 +43,18 @@ export function getProviders(): ProviderConfig[] {
       models: ["myprd-demo"],
       costPerMTokIn: 0,
       costPerMTokOut: 0,
+    },
+    {
+      id: "gemini",
+      label: "Google Gemini",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKey: readKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI"),
+      models: (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash")
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean),
+      costPerMTokIn: 0.3,
+      costPerMTokOut: 2.5,
     },
     {
       id: "openai",
@@ -160,6 +172,16 @@ export function appSecret(): string {
 
 export function databasePath(): string {
   return process.env.DATABASE_PATH ?? "data/myprd.db";
+}
+
+/**
+ * Batas diam provider: kalau tidak ada chunk baru selama ini, stream dianggap
+ * macet (provider free tier kadang berhenti tanpa menutup koneksi).
+ * Default 120 detik; bisa diturunkan untuk pengujian.
+ */
+export function aiIdleTimeoutMs(): number {
+  const raw = Number(process.env.AI_IDLE_TIMEOUT_MS ?? 120_000);
+  return Number.isFinite(raw) && raw >= 100 ? raw : 120_000;
 }
 
 export const freeMonthlyQuota = Number(process.env.FREE_MONTHLY_QUOTA ?? 5);

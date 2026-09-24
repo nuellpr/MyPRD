@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { PRD_SECTIONS, chatSystemPrompt, generateSystemPrompt, buildMessages, isReadyForPrd, stripMarkers, cleanPrdMarkdown, deriveTitleFromPrd, looksLikePrd } =
-  await import("../lib/prd.ts");
+const {
+  PRD_SECTIONS,
+  chatSystemPrompt,
+  generateSystemPrompt,
+  buildMessages,
+  isReadyForPrd,
+  stripMarkers,
+  createMarkerFilter,
+  cleanPrdMarkdown,
+  deriveTitleFromPrd,
+  looksLikePrd,
+} = await import("../lib/prd.ts");
 
 test("PRD_SECTIONS memuat bagian wajib sesuai PRD (12 bagian)", () => {
   assert.equal(PRD_SECTIONS.length, 12);
@@ -39,8 +49,11 @@ test("buildMessages menaruh system prompt di depan dan menyertakan ide", () => {
 
 test("buildMessages mode generate menyertakan ide awal sebagai konteks pertama", () => {
   const messages = buildMessages({ language: "id", history: [], idea: "resep masakan", mode: "generate" });
-  assert.equal(messages.length, 2);
+  // system + ide awal + instruksi penutup (wajib agar provider seperti Gemini
+  // tidak menolak request yang berakhir dengan giliran model).
+  assert.equal(messages.length, 3);
   assert.match(messages[1].content, /Ide produk awal dari user: resep masakan/);
+  assert.equal(messages.at(-1)?.role, "user");
 });
 
 test("buildMessages mode generate menaruh ide awal sebelum history", () => {
@@ -57,6 +70,23 @@ test("buildMessages mode generate menaruh ide awal sebelum history", () => {
   assert.equal(messages[1].role, "user");
   assert.match(messages[1].content, /aplikasi booking futsal/);
   assert.equal(messages[2].content, "Targetnya anak muda");
+});
+
+test("buildMessages mode generate selalu berakhir dengan giliran user", () => {
+  // Gemini menolak request yang berakhir dengan giliran model:
+  // "Requests ending with a model turn are not supported."
+  const withHistory = buildMessages({
+    language: "id",
+    mode: "generate",
+    history: [
+      { role: "user", content: "Fitur wajib: scan barcode" },
+      { role: "assistant", content: "Siap, saya catat." },
+    ],
+  });
+  assert.equal(withHistory.at(-1)?.role, "user");
+
+  const withoutHistory = buildMessages({ language: "id", mode: "generate", history: [] });
+  assert.equal(withoutHistory.at(-1)?.role, "user");
 });
 
 test("buildMessages menyaring role system dari history", () => {
@@ -95,6 +125,55 @@ test("deriveTitleFromPrd fallback ke ringkasan lalu ke judul project", () => {
   assert.equal(deriveTitleFromPrd(withoutH1, "fallback"), "Aplikasi pencatat utang pelanggan.");
   assert.equal(deriveTitleFromPrd("tidak ada struktur", "Project Saya"), "Project Saya");
   assert.equal(deriveTitleFromPrd("", ""), "PRD tanpa judul");
+});
+
+test("deriveTitleFromPrd tanpa H1 memakai kalimat pertama, bukan potongan 80 karakter", () => {
+  const long =
+    "## Ringkasan Produk\nAplikasi stok & kasir untuk toko kelontong. Fitur lanjutan menyusul di versi berikutnya.\n\n## Tujuan";
+  const title = deriveTitleFromPrd(long, "fallback");
+  assert.equal(title, "Aplikasi stok & kasir untuk toko kelontong.");
+  assert.ok(!title.includes("Fitur lanjutan"), "harus berhenti di kalimat pertama");
+
+  // Kalimat pertama yang terlalu panjang dipotong di batas kata (maks 80 karakter).
+  const veryLong = `## Ringkasan Produk\n${"kata ".repeat(30)}.\n\n## Tujuan`;
+  const cut = deriveTitleFromPrd(veryLong, "fallback");
+  assert.ok(cut.length <= 80, `panjang ${cut.length}`);
+  assert.ok(!cut.endsWith(" "), "tidak boleh berakhir spasi");
+  assert.match(veryLong, new RegExp(cut.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("createMarkerFilter menahan marker utuh yang terbagi antar chunk", () => {
+  const filter = createMarkerFilter();
+  let visible = "";
+  visible += filter.push("Siap ya, saya susun PRD-nya.\n[[SIA");
+  visible += filter.push("P_PRD");
+  visible += filter.push("]]\n");
+  visible += filter.flush();
+  assert.ok(!visible.includes("[[SIAP_PRD]]"), `marker bocor: ${JSON.stringify(visible)}`);
+  assert.ok(!visible.includes("[[SIA"), `potongan marker bocor: ${JSON.stringify(visible)}`);
+  assert.match(visible, /Siap ya, saya susun PRD-nya\./);
+});
+
+test("createMarkerFilter tetap meneruskan teks normal tanpa marker", () => {
+  const filter = createMarkerFilter();
+  let visible = "";
+  for (const chunk of ["Halo", " dunia", ", apa", " kabar?"]) visible += filter.push(chunk);
+  visible += filter.flush();
+  assert.equal(visible, "Halo dunia, apa kabar?");
+});
+
+test("createMarkerFilter menangani marker di awal, tengah, dan akhir", () => {
+  const a = createMarkerFilter();
+  assert.equal(a.push("[[SIAP_PRD]]") + a.flush(), "");
+
+  const b = createMarkerFilter();
+  const mid = b.push("Sebelum [[SIAP_PRD]] sesudah") + b.flush();
+  assert.equal(mid, "Sebelum  sesudah");
+
+  const c = createMarkerFilter();
+  const end = c.push("Cukup.\n[[SIAP_PRD") + c.push("]]") + c.flush();
+  assert.match(end, /Cukup\./);
+  assert.ok(!end.includes("SIAP"));
 });
 
 test("looksLikePrd butuh minimal 3 heading dan kriteria selesai", () => {
