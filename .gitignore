@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local database & dev secret
+/data/
+
+# local dev/smoke logs
+*.log
+
+

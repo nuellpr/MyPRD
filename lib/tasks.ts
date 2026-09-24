@@ -1,0 +1,169 @@
+/**
+ * Parsing bagian "Task Breakdown" dari PRD menjadi data terstruktur.
+ *
+ * Format yang diharapkan (dihasilkan system prompt di lib/prd.ts):
+ *   - [ ] T1 — <judul> | file: <path> | depends: <T0/none> | kompleksitas: S/M/L
+ *
+ * Parser dibuat toleran: kalau format tidak persis, baris tetap diambil
+ * sebagai task dengan metadata seadanya supaya user tidak kehilangan data.
+ */
+export interface ParsedTask {
+  id: string;
+  title: string;
+  files: string[];
+  depends: string[];
+  complexity: "S" | "M" | "L" | "?";
+  done: boolean;
+  raw: string;
+}
+
+const TASK_LINE = /^\s*[-*]\s*\[( |x|X)\]\s*(.+)$/;
+
+function splitMeta(rest: string): { title: string; meta: Map<string, string> } {
+  const parts = rest.split("|").map((p) => p.trim());
+  const title = parts.shift() ?? rest;
+  const meta = new Map<string, string>();
+  for (const part of parts) {
+    const idx = part.indexOf(":");
+    if (idx > 0) meta.set(part.slice(0, idx).trim().toLowerCase(), part.slice(idx + 1).trim());
+  }
+  return { title, meta };
+}
+
+function parseList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter((v) => v !== "" && !/^(none|-|n\/a)$/i.test(v));
+}
+
+/** Ambil bagian Task Breakdown dari markdown PRD. */
+export function extractTaskSection(markdown: string): string | null {
+  const lines = markdown.split(/\r?\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{1,4}\s*.*task breakdown/i.test(lines[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+  if (start === -1) return null;
+  const collected: string[] = [];
+  for (let i = start; i < lines.length; i++) {
+    if (/^#{1,4}\s+/.test(lines[i])) break;
+    collected.push(lines[i]);
+  }
+  return collected.join("\n");
+}
+
+export function parseTasks(markdown: string): ParsedTask[] {
+  const section = extractTaskSection(markdown);
+  if (!section) return [];
+  const tasks: ParsedTask[] = [];
+  for (const line of section.split(/\r?\n/)) {
+    const match = line.match(TASK_LINE);
+    if (!match) continue;
+    const done = match[1].toLowerCase() === "x";
+    const { title, meta } = splitMeta(match[2]);
+    const idMatch = title.match(/^(T\d+)\b\s*[—\-–:.]?\s*/i);
+    const id = idMatch ? idMatch[1].toUpperCase() : `T${tasks.length + 1}`;
+    const cleanTitle = idMatch ? title.slice(idMatch[0].length).trim() : title;
+    const complexityRaw = (meta.get("kompleksitas") ?? meta.get("complexity") ?? "?").toUpperCase();
+    const complexity = complexityRaw === "S" || complexityRaw === "M" || complexityRaw === "L" ? complexityRaw : "?";
+    tasks.push({
+      id,
+      title: cleanTitle || title,
+      files: parseList(meta.get("file") ?? meta.get("files")),
+      depends: parseList(meta.get("depends") ?? meta.get("depends_on")),
+      complexity,
+      done,
+      raw: line.trim(),
+    });
+  }
+  return tasks;
+}
+
+/** Urutkan task secara topologis berdasarkan `depends` (fallback: urutan asli). */
+export function orderTasks(tasks: ParsedTask[]): ParsedTask[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const visited = new Set<string>();
+  const result: ParsedTask[] = [];
+
+  const visit = (task: ParsedTask, guard: Set<string>) => {
+    if (visited.has(task.id) || guard.has(task.id)) return;
+    guard.add(task.id);
+    for (const dep of task.depends) {
+      const parent = byId.get(dep);
+      if (parent) visit(parent, guard);
+    }
+    guard.delete(task.id);
+    if (!visited.has(task.id)) {
+      visited.add(task.id);
+      result.push(task);
+    }
+  };
+
+  for (const task of tasks) visit(task, new Set());
+  return result;
+}
+
+export interface TaskStats {
+  total: number;
+  done: number;
+  byComplexity: Record<"S" | "M" | "L" | "?", number>;
+  files: number;
+}
+
+export function taskStats(tasks: ParsedTask[]): TaskStats {
+  const byComplexity: TaskStats["byComplexity"] = { S: 0, M: 0, L: 0, "?": 0 };
+  const files = new Set<string>();
+  let done = 0;
+  for (const task of tasks) {
+    byComplexity[task.complexity] += 1;
+    if (task.done) done += 1;
+    for (const f of task.files) files.add(f);
+  }
+  return { total: tasks.length, done, byComplexity, files: files.size };
+}
+
+/** Export task ke JSON yang siap dipakai tooling/agent. */
+export function tasksToJson(projectTitle: string, tasks: ParsedTask[]): string {
+  return JSON.stringify(
+    {
+      project: projectTitle,
+      generatedAt: new Date().toISOString(),
+      tasks: orderTasks(tasks).map((t) => ({
+        id: t.id,
+        title: t.title,
+        files: t.files,
+        depends: t.depends,
+        complexity: t.complexity,
+        done: t.done,
+      })),
+    },
+    null,
+    2,
+  );
+}
+
+/** Export task ke checklist markdown. */
+export function tasksToMarkdown(projectTitle: string, tasks: ParsedTask[]): string {
+  const ordered = orderTasks(tasks);
+  const stats = taskStats(ordered);
+  return [
+    `# Task Breakdown — ${projectTitle}`,
+    "",
+    `Total: ${stats.total} task · Selesai: ${stats.done} · Kompleksitas S/M/L: ${stats.byComplexity.S}/${stats.byComplexity.M}/${stats.byComplexity.L}`,
+    "",
+    ...ordered.map((t) => {
+      const meta: string[] = [];
+      if (t.files.length) meta.push(`file: ${t.files.join(", ")}`);
+      if (t.depends.length) meta.push(`depends: ${t.depends.join(", ")}`);
+      if (t.complexity !== "?") meta.push(`kompleksitas: ${t.complexity}`);
+      const suffix = meta.length ? ` | ${meta.join(" | ")}` : "";
+      return `- [${t.done ? "x" : " "}] ${t.id} — ${t.title}${suffix}`;
+    }),
+    "",
+  ].join("\n");
+}

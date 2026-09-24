@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #e2e8f0;
 }
 
 @theme inline {
@@ -12,15 +12,120 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Prose sederhana untuk preview markdown PRD (tanpa plugin typography). */
+.prd-preview h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.25rem 0 0.75rem;
+  color: #f8fafc;
+}
+.prd-preview h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #1e293b;
+  color: #f1f5f9;
+}
+.prd-preview h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+  color: #e2e8f0;
+}
+.prd-preview p {
+  margin: 0.5rem 0;
+  line-height: 1.7;
+}
+.prd-preview ul,
+.prd-preview ol {
+  margin: 0.5rem 0 0.5rem 1.25rem;
+  line-height: 1.7;
+}
+.prd-preview ul {
+  list-style: disc;
+}
+.prd-preview ol {
+  list-style: decimal;
+}
+.prd-preview li {
+  margin: 0.2rem 0;
+}
+.prd-preview code {
+  background: #1e293b;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  font-size: 0.85em;
+  font-family: var(--font-geist-mono), monospace;
+}
+.prd-preview pre {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.prd-preview pre code {
+  background: transparent;
+  padding: 0;
+}
+.prd-preview blockquote {
+  border-left: 3px solid #334155;
+  padding-left: 0.85rem;
+  color: #94a3b8;
+  margin: 0.75rem 0;
+}
+.prd-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+.prd-preview th,
+.prd-preview td {
+  border: 1px solid #1e293b;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+.prd-preview th {
+  background: #0f172a;
+}
+.prd-preview a {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+.prd-preview input[type="checkbox"] {
+  margin-right: 0.4rem;
+}
+
+/* Saat mencetak / simpan PDF, hanya tampilkan dokumen PRD. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  .print-area {
+    display: block !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+  }
+  .prd-preview h1,
+  .prd-preview h2,
+  .prd-preview h3 {
+    color: #0f172a !important;
+  }
+  .prd-preview h2 {
+    border-bottom-color: #cbd5e1 !important;
+  }
 }
