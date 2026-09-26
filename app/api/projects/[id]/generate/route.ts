@@ -5,7 +5,7 @@ import { errorToResponse, SSE_HEADERS, sseEvent, toReadableStream } from "@/lib/
 import { AI_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
 import { buildMessages, cleanPrdMarkdown, deriveTitleFromPrd, looksLikePrd, type Language } from "@/lib/prd";
 import { estimateCostUsd } from "@/lib/plans";
-import { addMessage, getProject, getQuotaState, listMessages, recordUsage, savePrd, touchProject, updateProject } from "@/lib/repo";
+import { addMessage, finalizeUsage, getProject, getQuotaState, listMessages, releaseUsage, reserveUsage, savePrd, touchProject, updateProject } from "@/lib/repo";
 import { withHeartbeat } from "@/lib/sse-heartbeat";
 import type { ChatMessage } from "@/lib/ai";
 
@@ -14,7 +14,7 @@ type Context = { params: Promise<{ id: string }> };
 /**
  * POST /api/projects/:id/generate — susun PRD final dari percakapan (SSE).
  *
- * Kuota free tier dicek di sini: satu generate = satu pemakaian kuota.
+ * Kuota free tier dicek & direservasi di sini: satu generate = satu pemakaian kuota.
  * PRD yang dihasilkan langsung disimpan supaya user tidak kehilangan hasil
  * kalau koneksi terputus di tengah streaming.
  */
@@ -54,8 +54,13 @@ export async function POST(_request: Request, { params }: Context) {
 
     const { stream, usage } = streamChat({ modelId: project.modelId, messages, maxOutputTokens: 6000, temperature: 0.4 });
 
-    const encoder = (async function* () {
-      yield sseEvent({ type: "start", modelId: project.modelId, quota });
+    // Reservasi kuota sebelum streaming: satu tick sinkron dengan cek kuota di
+    // atas, jadi dua permintaan paralel tidak bisa sama-sama lolos.
+    const usageId = reserveUsage({ userId: user.id, projectId: project.id, kind: "prd" });
+    let usageFinalized = false;
+
+    const body = (async function* () {
+      yield sseEvent({ type: "start", modelId: project.modelId, quota: getQuotaState(user.id, user.plan) });
       let output = "";
       let stalled = false;
       try {
@@ -96,16 +101,14 @@ export async function POST(_request: Request, { params }: Context) {
       const u = await usage;
       const parsed = parseModelId(project.modelId);
       const provider = parsed ? findProvider(parsed.providerId) : undefined;
-      recordUsage({
-        userId: user.id,
-        projectId: project.id,
-        kind: "prd",
+      finalizeUsage(usageId, {
         provider: u.provider,
         model: u.model,
         tokensIn: u.tokensIn,
         tokensOut: u.tokensOut,
         costUsd: estimateCostUsd(u.tokensIn, u.tokensOut, provider?.costPerMTokIn ?? 0, provider?.costPerMTokOut ?? 0),
       });
+      usageFinalized = true;
 
       yield sseEvent({
         type: "done",
@@ -118,7 +121,17 @@ export async function POST(_request: Request, { params }: Context) {
       });
     })();
 
-    return new Response(toReadableStream(encoder, (chunk) => chunk), { headers: SSE_HEADERS });
+    // Pembungkus: kalau klien putus di tengah stream, `body` ditutup dan
+    // reservasi kuota dibatalkan supaya user tidak terpotong tanpa hasil.
+    const encoder = (async function* () {
+      try {
+        yield* body;
+      } finally {
+        if (!usageFinalized) releaseUsage(usageId);
+      }
+    })();
+
+    return new Response(toReadableStream(encoder), { headers: SSE_HEADERS });
   } catch (error) {
     return errorToResponse(error);
   }

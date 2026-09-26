@@ -202,6 +202,40 @@ export function recordUsage(input: RecordUsageInput): void {
     );
 }
 
+/**
+ * Reservasi kuota: baris usage kosong yang langsung ikut terhitung kuota.
+ *
+ * Dipanggil sebelum streaming AI dimulai — satu tick sinkron dengan cek kuota —
+ * supaya dua generate paralel tidak bisa sama-sama lolos cek (dulu cek dan
+ * pencatatan berjarak beberapa menit karena menunggu stream selesai). Angka
+ * aslinya diisi `finalizeUsage`, atau barisnya dibuang lewat `releaseUsage`
+ * kalau generate gagal.
+ */
+export function reserveUsage(input: { userId: string; projectId: string; kind: string }): string {
+  const id = newId("usg");
+  getDb()
+    .prepare(
+      "INSERT INTO usage_events (id, user_id, project_id, kind, provider, model, tokens_in, tokens_out, cost_usd, created_at) VALUES (?, ?, ?, ?, '', '', 0, 0, 0, ?)",
+    )
+    .run(id, input.userId, input.projectId, input.kind, Date.now());
+  return id;
+}
+
+/** Isi token & biaya asli ke baris reservasi. */
+export function finalizeUsage(
+  usageId: string,
+  update: { provider: string; model: string; tokensIn: number; tokensOut: number; costUsd: number },
+): void {
+  getDb()
+    .prepare("UPDATE usage_events SET provider = ?, model = ?, tokens_in = ?, tokens_out = ?, cost_usd = ? WHERE id = ?")
+    .run(update.provider, update.model, Math.round(update.tokensIn), Math.round(update.tokensOut), update.costUsd, usageId);
+}
+
+/** Buang reservasi kuota (generate gagal / klien putus sebelum PRD tersimpan). */
+export function releaseUsage(usageId: string): void {
+  getDb().prepare("DELETE FROM usage_events WHERE id = ?").run(usageId);
+}
+
 /** Kuota dihitung dari usage_events bulan berjalan (kind = 'prd' / 'task'). */
 export function getQuotaState(userId: string, plan: string): QuotaState {
   const row = getDb()

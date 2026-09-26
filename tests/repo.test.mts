@@ -132,6 +132,27 @@ test("getQuotaState menghitung kuota dari usage_events kind=prd bulan ini", () =
   assert.equal(exhausted.remaining, 0);
 });
 
+test("reservasi kuota langsung terhitung dan bisa difinalkan / dibatalkan", () => {
+  const project = repo.createProject({ userId, title: "Reservasi", idea: "", modelId: "mock/myprd-demo", language: "id" });
+  const before = repo.getQuotaState(userId, "free").used;
+
+  const usageId = repo.reserveUsage({ userId, projectId: project.id, kind: "prd" });
+  // Inilah yang menutup race: kuota terpotong segera, bukan setelah stream selesai.
+  assert.equal(repo.getQuotaState(userId, "free").used, before + 1);
+
+  repo.finalizeUsage(usageId, { provider: "mock", model: "myprd-demo", tokensIn: 10, tokensOut: 20, costUsd: 0 });
+  const row = getDb().prepare("SELECT provider, tokens_out FROM usage_events WHERE id = ?").get(usageId) as
+    | { provider: string; tokens_out: number }
+    | undefined;
+  assert.equal(row?.provider, "mock");
+  assert.equal(row?.tokens_out, 20);
+  assert.equal(repo.getQuotaState(userId, "free").used, before + 1);
+
+  const dibatalkan = repo.reserveUsage({ userId, projectId: project.id, kind: "prd" });
+  repo.releaseUsage(dibatalkan);
+  assert.equal(repo.getQuotaState(userId, "free").used, before + 1);
+});
+
 test("getQuotaState mengabaikan usage bulan lalu", () => {
   const before = repo.getQuotaState(userId, "pro").used;
   const old = Date.now() - 1000 * 60 * 60 * 24 * 70; // ~70 hari lalu

@@ -177,12 +177,27 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_order ON bookings(order_id) WHERE
 `;
 
 function initDb(): DatabaseSync {
-  const file = path.resolve(process.cwd(), databasePath());
+  // turbopackIgnore: path DB bisa dikonfigurasi lewat DATABASE_PATH, dan tanpa
+  // penanda ini Turbopack menganggap seluruh project ikut ter-trace ke output build.
+  const file = path.resolve(/*turbopackIgnore: true*/ process.cwd(), databasePath());
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  sweepStaleUsageReservations(db);
   migrateUsersPasswordNullable(db);
   return db;
+}
+
+/**
+ * Bersihkan reservasi kuota yang menggantung (proses mati atau klien putus
+ * sebelum stream mulai) supaya kuota user tidak ikut terpotong. Reservasi
+ * ditandai `provider = ''`; generate sungguhan tidak pernah menggantung lebih
+ * dari satu jam (watchdog diam default 120 detik).
+ */
+function sweepStaleUsageReservations(db: DatabaseSync): void {
+  db.prepare("DELETE FROM usage_events WHERE kind = 'prd' AND provider = '' AND created_at < ?").run(
+    Date.now() - 60 * 60 * 1000,
+  );
 }
 
 /**

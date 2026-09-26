@@ -116,7 +116,7 @@ export async function POST(request: Request, { params }: Context) {
       });
     })();
 
-    return new Response(toReadableStream(encoder, (chunk) => chunk), { headers: SSE_HEADERS });
+    return new Response(toReadableStream(encoder), { headers: SSE_HEADERS });
   } catch (error) {
     return errorToResponse(error);
   }
