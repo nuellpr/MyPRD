@@ -25,6 +25,9 @@ export async function PATCH(request: Request, { params }: Context) {
     }
     const booking = cancelBooking(user.id, id);
     if (!booking) return jsonError("Booking tidak ditemukan.", 404);
+    if (booking.status !== "cancelled") {
+      return jsonError("Booking ini tidak bisa dibatalkan — hanya booking yang belum dibayar.", 409);
+    }
     return jsonOk({ booking });
   } catch (error) {
     return errorToResponse(error);
