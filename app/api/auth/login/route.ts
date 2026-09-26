@@ -1,10 +1,10 @@
 import { authenticate, setSessionCookie, toPublicUser } from "@/lib/auth";
 import { errorToResponse, jsonOk, readJson } from "@/lib/http";
-import { AUTH_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
+import { AUTH_RATE_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for") ?? "local";
+    const ip = clientIp(request);
     const limited = rateLimit(`login:${ip}`, AUTH_RATE_LIMIT.limit, AUTH_RATE_LIMIT.windowMs);
     if (!limited.allowed) {
       return Response.json(

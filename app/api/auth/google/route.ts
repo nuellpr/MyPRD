@@ -1,13 +1,13 @@
 import { jsonError } from "@/lib/http";
 import { googleAuthUrl, googleConfigured, googleRedirectUri, signOAuthState } from "@/lib/oauth";
-import { AUTH_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
+import { AUTH_RATE_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 /** Mulai login Google: redirect ke halaman persetujuan Google. */
 export async function GET(request: Request) {
   if (!googleConfigured()) {
     return jsonError("Login Google belum dikonfigurasi di server ini.", 503);
   }
-  const ip = request.headers.get("x-forwarded-for") ?? "local";
+  const ip = clientIp(request);
   const limited = rateLimit(`oauth-google:${ip}`, AUTH_RATE_LIMIT.limit, AUTH_RATE_LIMIT.windowMs);
   if (!limited.allowed) {
     return Response.json(

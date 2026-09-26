@@ -1,10 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+
+/** Hanya izinkan redirect ke path lokal — tolak "//evil.com" (protocol-relative). */
+function safeNext(value: string | null): string | null {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
 
 export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; googleEnabled: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -12,12 +18,9 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
   const [loading, setLoading] = useState(false);
 
   const isRegister = mode === "register";
-  const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const nextParam = query?.get("next");
-  const googleHref = `/api/auth/google${
-    nextParam && nextParam.startsWith("/") ? `?next=${encodeURIComponent(nextParam)}` : ""
-  }`;
-  const oauthFailed = query?.get("oauth") === "gagal";
+  const nextParam = safeNext(searchParams.get("next"));
+  const googleHref = `/api/auth/google${nextParam ? `?next=${encodeURIComponent(nextParam)}` : ""}`;
+  const oauthFailed = searchParams.get("oauth") === "gagal";
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -34,8 +37,7 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
         setError(data.error ?? "Terjadi kesalahan.");
         return;
       }
-      const next = new URLSearchParams(window.location.search).get("next");
-      router.push(next && next.startsWith("/") ? next : "/dashboard");
+      router.push(nextParam ?? "/dashboard");
       router.refresh();
     } catch {
       setError("Tidak bisa menghubungi server.");

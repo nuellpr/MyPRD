@@ -50,3 +50,13 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
 export const AI_RATE_LIMIT = { limit: 20, windowMs: 60_000 };
 /** Batas untuk endpoint auth: 10 percobaan / 5 menit per IP. */
 export const AUTH_RATE_LIMIT = { limit: 10, windowMs: 5 * 60_000 };
+
+/**
+ * IP klien dari header proxy. `X-Forwarded-For` bisa berisi daftar
+ * ("klien, proxy1, ...") — ambil entri pertama supaya kunci rate limit stabil
+ * (tanpa ini, satu klien bisa dihitung sebagai beberapa bucket).
+ */
+export function clientIp(request: Request): string {
+  const first = (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim();
+  return first || "local";
+}
