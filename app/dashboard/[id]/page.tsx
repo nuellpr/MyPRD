@@ -37,7 +37,6 @@ export default async function ProjectPage({ params }: PageProps<"/dashboard/[id]
           idea: project.idea,
           modelId: project.modelId,
           language: project.language === "en" ? "en" : "id",
-          status: project.status,
           updatedAt: project.updatedAt,
         }}
         initialMessages={messages}

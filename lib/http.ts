@@ -10,8 +10,8 @@ export function jsonOk<T>(data: T, status = 200): Response {
   return Response.json(data as unknown as Record<string, unknown>, { status });
 }
 
-export function jsonError(message: string, status = 400, extra?: Record<string, unknown>): Response {
-  return Response.json({ error: message, ...extra }, { status });
+export function jsonError(message: string, status = 400): Response {
+  return Response.json({ error: message }, { status });
 }
 
 export function errorToResponse(error: unknown): Response {
@@ -32,8 +32,8 @@ export async function readJson<T>(request: Request): Promise<T> {
   }
 }
 
-/** Ubah async iterable menjadi ReadableStream (untuk SSE). */
-export function toReadableStream<T>(iterable: AsyncIterable<T>, encode: (item: T) => string): ReadableStream<Uint8Array> {
+/** Ubah stream teks SSE menjadi ReadableStream. */
+export function toReadableStream(iterable: AsyncIterable<string>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const iterator = iterable[Symbol.asyncIterator]();
   return new ReadableStream<Uint8Array>({
@@ -44,7 +44,7 @@ export function toReadableStream<T>(iterable: AsyncIterable<T>, encode: (item: T
           controller.close();
           return;
         }
-        controller.enqueue(encoder.encode(encode(value)));
+        controller.enqueue(encoder.encode(value));
       } catch (error) {
         controller.error(error);
       }

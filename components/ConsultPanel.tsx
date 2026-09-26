@@ -3,20 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AdminBooking, Booking } from "@/lib/repo";
-
-declare global {
-  interface Window {
-    snap?: { pay: (token: string, callbacks?: Record<string, () => void>) => void };
-  }
-}
-
-function formatIdr(value: number): string {
-  return `Rp${value.toLocaleString("id-ID")}`;
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-}
+import { formatDate, formatIdr } from "@/lib/format";
+import { payWithSnap } from "./snap";
 
 const STATUS_STYLE: Record<string, string> = {
   pending_payment: "bg-amber-500/15 text-amber-300",
@@ -31,17 +19,6 @@ const STATUS_LABEL: Record<string, string> = {
   done: "Selesai",
   cancelled: "Dibatalkan",
 };
-
-function loadSnapJs(src: string): Promise<void> {
-  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Gagal memuat snap.js Midtrans."));
-    document.body.appendChild(script);
-  });
-}
 
 export function ConsultPanel({
   bookings,
@@ -65,20 +42,6 @@ export function ConsultPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function payWithSnap(token: string) {
-    try {
-      await loadSnapJs(snapJsUrl);
-      window.snap?.pay(token, {
-        onSuccess: () => router.refresh(),
-        onPending: () => router.refresh(),
-        onError: () => setError("Pembayaran gagal. Coba lagi."),
-        onClose: () => router.refresh(),
-      });
-    } catch {
-      setError("Gagal memuat popup pembayaran Midtrans.");
-    }
-  }
-
   async function submit() {
     if (!topic.trim() || busy !== null) return;
     setBusy("new");
@@ -97,7 +60,9 @@ export function ConsultPanel({
       setTopic("");
       setContact("");
       setPreferredDate("");
-      if (data.snapToken) await payWithSnap(data.snapToken);
+      if (data.snapToken) {
+        await payWithSnap(snapJsUrl, data.snapToken, { onError: setError, onSettled: () => router.refresh() });
+      }
       router.refresh();
     } catch {
       setError("Koneksi ke server terputus.");

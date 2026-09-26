@@ -1,9 +1,6 @@
 import Link from "next/link";
+import { formatIdr } from "@/lib/format";
 import { PLANS, type PlanId } from "@/lib/plans";
-
-function formatIdr(value: number): string {
-  return value === 0 ? "Rp0" : `Rp${value.toLocaleString("id-ID")}`;
-}
 
 export function PricingCards({ highlight }: { highlight?: PlanId }) {
   const order: PlanId[] = ["free", "starter", "pro"];

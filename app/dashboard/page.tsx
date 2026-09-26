@@ -7,12 +7,9 @@ import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser, toPublicUser } from "@/lib/auth";
 import { badgesForStats, getUserStats } from "@/lib/community";
 import { defaultModelId, getAvailableProviders } from "@/lib/env";
+import { formatDate } from "@/lib/format";
 import { getPlan } from "@/lib/plans";
 import { getQuotaState, listProjects } from "@/lib/repo";
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-}
 
 const STATUS_LABEL: Record<string, string> = {
   chatting: "Sedang ngobrol",

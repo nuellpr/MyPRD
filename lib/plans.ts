@@ -36,7 +36,6 @@ export const PLANS: Record<PlanId, Plan> = {
     priceIdr: 49000,
     monthlyQuota: 100,
     features: [
-      "100 generate PRD/bulan",
       "Semua model AI standar",
       "Export markdown + PDF",
       "Riwayat project tanpa batas",
@@ -48,7 +47,6 @@ export const PLANS: Record<PlanId, Plan> = {
     priceIdr: 149000,
     monthlyQuota: 1000,
     features: [
-      "Kuota besar (fair use)",
       "Akses model AI premium",
       "Export markdown + PDF",
       "Priority support & diskon konsultasi",

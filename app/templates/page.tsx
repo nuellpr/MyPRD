@@ -42,17 +42,6 @@ export default async function TemplatesPage() {
                 </span>
               </div>
               <p className="mt-2 text-sm text-slate-300">{template.tagline}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {template.stack.map((s) => (
-                  <span
-                    key={s.label}
-                    title={s.category}
-                    className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-xs text-slate-300"
-                  >
-                    {s.label}
-                  </span>
-                ))}
-              </div>
               <p className="mt-3 text-xs text-slate-500">{stackLine(template)}</p>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link

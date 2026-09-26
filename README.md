@@ -55,7 +55,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 npm run build      # build produksi
 npm start          # jalankan hasil build
 npm test           # unit test (node --test, tanpa dependency test tambahan)
-npm run smoke      # smoke test end-to-end (build + start di port 3210 + 43 pemeriksaan alur utama)
+npm run smoke      # smoke test E2E (butuh `npm run build` dulu; start di port 3210 + 73 pemeriksaan alur utama)
+npm run e2e:live   # E2E dengan provider AI asli (default Gemini; butuh API key di .env.local)
 npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 ```

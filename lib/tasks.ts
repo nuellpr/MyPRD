@@ -14,7 +14,6 @@ export interface ParsedTask {
   depends: string[];
   complexity: "S" | "M" | "L" | "?";
   done: boolean;
-  raw: string;
 }
 
 const TASK_LINE = /^\s*[-*]\s*\[( |x|X)\]\s*(.+)$/;
@@ -78,7 +77,6 @@ export function parseTasks(markdown: string): ParsedTask[] {
       depends: parseList(meta.get("depends") ?? meta.get("depends_on")),
       complexity,
       done,
-      raw: line.trim(),
     });
   }
   return tasks;

@@ -219,17 +219,6 @@ export function getDb(): DatabaseSync {
   return g.__myprdDb;
 }
 
-/** Untuk test: buat DB in-memory terpisah dengan skema yang sama. */
-export function createTestDb(): DatabaseSync {
-  const db = new DatabaseSync(":memory:");
-  db.exec(SCHEMA);
-  return db;
-}
-
-export function nowMs(): number {
-  return Date.now();
-}
-
 export function startOfMonthMs(reference = Date.now()): number {
   const d = new Date(reference);
   return new Date(d.getFullYear(), d.getMonth(), 1).getTime();

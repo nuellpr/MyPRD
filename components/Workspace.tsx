@@ -22,7 +22,6 @@ export interface WorkspaceProject {
   idea: string;
   modelId: string;
   language: "id" | "en";
-  status: string;
   updatedAt: number;
 }
 
@@ -92,7 +91,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [prd, setPrd] = useState(initialPrd ?? "");
-  const [tab, setTab] = useState<Tab>(initialPrd ? "preview" : "preview");
+  const [tab, setTab] = useState<Tab>("preview");
   const [quotaState, setQuotaState] = useState(quota);
   const [readyForPrd, setReadyForPrd] = useState(false);
   const [generating, setGenerating] = useState(false);

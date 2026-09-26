@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Order } from "@/lib/repo";
+import { formatDate, formatIdr } from "@/lib/format";
+import { payWithSnap } from "./snap";
 
 export interface BillingPlanOption {
   id: string;
@@ -10,20 +12,6 @@ export interface BillingPlanOption {
   priceIdr: number;
   monthlyQuota: number;
   features: string[];
-}
-
-declare global {
-  interface Window {
-    snap?: { pay: (token: string, callbacks?: Record<string, () => void>) => void };
-  }
-}
-
-function formatIdr(value: number): string {
-  return `Rp${value.toLocaleString("id-ID")}`;
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -39,17 +27,6 @@ const STATUS_LABEL: Record<string, string> = {
   failed: "Gagal",
   expired: "Kedaluwarsa",
 };
-
-function loadSnapJs(src: string): Promise<void> {
-  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Gagal memuat snap.js Midtrans."));
-    document.body.appendChild(script);
-  });
-}
 
 export function BillingPanel({
   currentPlan,
@@ -68,20 +45,6 @@ export function BillingPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  async function payWithSnap(token: string) {
-    try {
-      await loadSnapJs(snapJsUrl);
-      window.snap?.pay(token, {
-        onSuccess: () => router.refresh(),
-        onPending: () => router.refresh(),
-        onError: () => setError("Pembayaran gagal. Coba lagi."),
-        onClose: () => router.refresh(),
-      });
-    } catch {
-      setError("Gagal memuat popup pembayaran Midtrans.");
-    }
-  }
-
   async function checkout(planId: string) {
     setBusy(planId);
     setError("");
@@ -97,7 +60,7 @@ export function BillingPanel({
         return;
       }
       if (data.snapToken) {
-        await payWithSnap(data.snapToken);
+        await payWithSnap(snapJsUrl, data.snapToken, { onError: setError, onSettled: () => router.refresh() });
       }
       router.refresh();
     } catch {
@@ -227,7 +190,9 @@ export function BillingPanel({
                     <button
                       type="button"
                       disabled={busy !== null}
-                      onClick={() => payWithSnap(order.providerRef)}
+                      onClick={() =>
+                        void payWithSnap(snapJsUrl, order.providerRef, { onError: setError, onSettled: () => router.refresh() })
+                      }
                       className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
                     >
                       Lanjutkan bayar
