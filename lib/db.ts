@@ -85,6 +85,13 @@ export interface UsageRow {
   created_at: number;
 }
 
+export interface SessionRow {
+  id: string;
+  user_id: string;
+  created_at: number;
+  expires_at: number;
+}
+
 interface GlobalWithDb {
   __myprdDb?: DatabaseSync;
 }
@@ -174,6 +181,14 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_order ON bookings(order_id) WHERE order_id <> '';
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 `;
 
 function initDb(): DatabaseSync {
@@ -184,6 +199,7 @@ function initDb(): DatabaseSync {
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
   sweepStaleUsageReservations(db);
+  sweepExpiredSessions(db);
   migrateUsersPasswordNullable(db);
   return db;
 }
@@ -198,6 +214,11 @@ function sweepStaleUsageReservations(db: DatabaseSync): void {
   db.prepare("DELETE FROM usage_events WHERE kind = 'prd' AND provider = '' AND created_at < ?").run(
     Date.now() - 60 * 60 * 1000,
   );
+}
+
+/** Buang sesi yang sudah kedaluwarsa supaya tabelnya tidak tumbuh terus. */
+function sweepExpiredSessions(db: DatabaseSync): void {
+  db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(Date.now());
 }
 
 /**

@@ -4,7 +4,7 @@
  * Isi pesan & PRD disimpan terenkripsi (AES-256-GCM) di kolom `*_enc`,
  * lalu didekripsi saat dibaca supaya tidak tersebar logika crypto di route.
  */
-import { getDb, startOfMonthMs, type BookingRow, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type UserRow } from "./db.ts";
+import { getDb, startOfMonthMs, type BookingRow, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type SessionRow, type UserRow } from "./db.ts";
 import { decryptContent, encryptContent, newId } from "./crypto.ts";
 import { evaluateQuota, getPlan, type QuotaState } from "./plans.ts";
 
@@ -404,6 +404,39 @@ export function findOrCreateOAuthUser(email: string, name: string): UserRow {
     .prepare("INSERT INTO users (id, email, name, password_hash, plan, created_at) VALUES (?, ?, ?, ?, ?, ?)")
     .run(row.id, row.email, row.name, row.password_hash, row.plan, row.created_at);
   return row;
+}
+
+export interface Session {
+  id: string;
+  userId: string;
+  expiresAt: number;
+}
+
+/** Buat sesi baru (dipakai saat login) — id-nya ikut masuk ke cookie bertanda tangan. */
+export function createSession(userId: string, ttlMs: number): Session {
+  const now = Date.now();
+  const session: Session = { id: newId("ses"), userId, expiresAt: now + ttlMs };
+  getDb()
+    .prepare("INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)")
+    .run(session.id, session.userId, now, session.expiresAt);
+  return session;
+}
+
+/**
+ * Sesi yang masih aktif; null kalau tidak ada, sudah kedaluwarsa, atau sudah
+ * dicabut (barisnya dihapus saat logout). Inilah yang membuat cookie lama tidak
+ * bisa dipakai lagi setelah user keluar.
+ */
+export function getActiveSession(sessionId: string): Session | null {
+  const row = getDb()
+    .prepare("SELECT * FROM sessions WHERE id = ? AND expires_at > ?")
+    .get(sessionId, Date.now()) as SessionRow | undefined;
+  return row ? { id: row.id, userId: row.user_id, expiresAt: row.expires_at } : null;
+}
+
+/** Cabut satu sesi (logout di perangkat ini; sesi perangkat lain tetap hidup). */
+export function revokeSession(sessionId: string): void {
+  getDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
 }
 
 export type BookingStatus = "pending_payment" | "scheduled" | "done" | "cancelled";

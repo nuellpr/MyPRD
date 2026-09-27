@@ -39,6 +39,12 @@ function sessionKey(): Buffer {
 export interface SessionPayload {
   userId: string;
   exp: number;
+  /**
+   * id sesi di tabel `sessions`. Opsional supaya token lama (tanpa `sid`) tetap
+   * bisa diverifikasi tanda tangannya, lalu ditolak di `auth.currentUser()`
+   * sehingga user diminta login ulang.
+   */
+  sid?: string;
 }
 
 /** Token sesi: payload base64url + HMAC-SHA256, disimpan di cookie httpOnly. */

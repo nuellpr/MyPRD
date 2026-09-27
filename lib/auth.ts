@@ -1,9 +1,14 @@
 /**
  * Autentikasi: sesi berbasis cookie httpOnly + hash password scrypt,
  * plus login via Google OAuth (user OAuth tersimpan dengan password_hash NULL).
+ *
+ * Sesi dicatat juga di tabel `sessions`: cookie membawa `sid` bertanda tangan
+ * HMAC, dan `currentUser()` menolak sesi yang barisnya sudah dihapus (logout)
+ * atau sudah kedaluwarsa.
  */
 import { cookies } from "next/headers";
 import { getDb, type UserRow } from "./db.ts";
+import { createSession, getActiveSession, revokeSession } from "./repo.ts";
 import { hashPassword, newId, signSession, verifyPassword, verifySession } from "./crypto.ts";
 
 export const SESSION_COOKIE = "myprd_session";
@@ -80,7 +85,9 @@ export class AuthError extends Error {
 
 export async function setSessionCookie(userId: string): Promise<void> {
   const store = await cookies();
-  const token = signSession({ userId, exp: Date.now() + SESSION_TTL_MS });
+  // Sesi dicatat di server supaya logout bisa mencabutnya tanpa menunggu TTL.
+  const session = createSession(userId, SESSION_TTL_MS);
+  const token = signSession({ userId, sid: session.id, exp: session.expiresAt });
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -92,6 +99,8 @@ export async function setSessionCookie(userId: string): Promise<void> {
 
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
+  const payload = verifySession(store.get(SESSION_COOKIE)?.value ?? "");
+  if (payload?.sid) revokeSession(payload.sid);
   store.delete(SESSION_COOKIE);
 }
 
@@ -101,7 +110,10 @@ export async function currentUser(): Promise<UserRow | null> {
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const payload = verifySession(token);
-  if (!payload) return null;
+  if (!payload?.sid) return null;
+  // Sesi harus masih ada di server: belum dicabut (logout) dan belum kedaluwarsa.
+  const session = getActiveSession(payload.sid);
+  if (!session || session.userId !== payload.userId) return null;
   return findUserById(payload.userId) ?? null;
 }
 

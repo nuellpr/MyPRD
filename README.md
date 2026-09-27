@@ -19,7 +19,7 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Template & starter kit | ✅ | Galeri `/templates`: Starter Next.js, TanStack & FastAPI + prompt install sekali salin untuk AI agent |
 | Dictation ide | ✅ | Tombol mic di form ide (Web Speech API Bahasa Indonesia, tanpa server) |
 | Export | ✅ | Markdown, JSON, checklist task `.md`/`.json`, PDF server (Starter/Pro), dan Cetak via browser |
-| Auth | ✅ | Email + password (scrypt) **dan login Google OAuth** (opsional, via `GOOGLE_CLIENT_ID`); sesi cookie httpOnly bertanda tangan HMAC |
+| Auth | ✅ | Email + password (scrypt) **dan login Google OAuth** (opsional, via `GOOGLE_CLIENT_ID`); sesi cookie httpOnly bertanda tangan HMAC + tercatat di tabel `sessions` (dicabut saat logout) |
 | Riwayat project | ✅ | Dashboard berisi daftar PRD dengan status & model terakhir |
 | Kuota free tier | ✅ | Dihitung dari usage per bulan, blokir 402 + pesan upgrade saat habis |
 | Pricing | ✅ | 3 tier (Free/Starter/Pro) di landing page |
@@ -172,6 +172,7 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 - **Anti prompt injection**: pesan user dibungkus `<pesan_user>…</pesan_user>` dengan catatan eksplisit bahwa isinya data, marker internal `[[SIAP_PRD]]` dibuang dari input user, panjang input dibatasi (chat 6.000 / ide 8.000 / PRD 200.000 karakter).
 - **Rate limit**: AI 20 req/menit per user, auth 10 percobaan/5 menit per IP. In-memory (single node) — ganti ke Redis untuk scale horizontal.
 - **Otorisasi**: semua query project selalu di-scope `user_id`, jadi user lain tidak bisa membaca project orang lain.
+- **Sesi bisa dicabut**: tiap login membuat baris di tabel `sessions` dan cookie hanya menyimpan `sid` bertanda tangan HMAC. Logout menghapus baris itu, jadi cookie lama langsung tidak berlaku walau belum kedaluwarsa (logout di satu perangkat tidak mematikan sesi perangkat lain); sesi kedaluwarsa dibersihkan saat aplikasi start.
 - **APP_SECRET wajib** minimal 16 karakter di production (aplikasi menolak start kalau kosong).
 
 ### Ketahanan streaming (provider free tier)
@@ -186,7 +187,7 @@ Provider seperti Gemini free tier kadang butuh waktu lama sebelum token pertama,
 
 ## Data
 
-SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `projects`, `messages`, `prds`, `usage_events`, `orders`, `bookings`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
+SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `sessions`, `projects`, `messages`, `prds`, `usage_events`, `orders`, `bookings`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
 
 Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND created_at >= awal bulan`, sehingga reset otomatis tanpa job terjadwal.
 

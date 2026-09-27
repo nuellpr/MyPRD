@@ -166,6 +166,18 @@ test("getQuotaState mengabaikan usage bulan lalu", () => {
   assert.equal(state.used, before, "usage bulan lalu tidak boleh menambah kuota terpakai");
 });
 
+test("sesi tercatat di server: bisa dicabut (logout) dan kedaluwarsa", () => {
+  const session = repo.createSession(userId, 60_000);
+  assert.equal(repo.getActiveSession(session.id)?.userId, userId);
+
+  repo.revokeSession(session.id); // logout
+  assert.equal(repo.getActiveSession(session.id), null, "cookie lama harus mati setelah logout");
+
+  const expired = repo.createSession(userId, -1_000);
+  assert.equal(repo.getActiveSession(expired.id), null, "sesi kedaluwarsa tidak boleh aktif");
+});
+
+
 test("getUsageSummary mengagregasi total & per model", () => {
   const summary = repo.getUsageSummary(userId);
   assert.ok(summary.events >= 3);
