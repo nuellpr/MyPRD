@@ -54,27 +54,30 @@ Ide Produk  ──▶  Plan Wizard (Stack + 5 Klarifikasi)  ──▶  PRD 12 Ba
 
 ## Roadmap
 
-### Fase 1 — Fondasi & Auth (Selesai)
-- [x] Register/login dengan password strength meter, verifikasi **OTP 6 digit**, dan reset password
-- [x] Google OAuth opsional & manajemen sesi revocable (`sessions`)
-- [x] Enkripsi at-rest `AES-256-GCM` untuk riwayat chat & dokumen PRD
+```mermaid
+flowchart LR
+    F1["✅ Fase 1: Fondasi & Auth<br/>• Register/Login + OTP 6 Digit<br/>• Google OAuth & Reset Password<br/>• Enkripsi AES-256-GCM + Sesi"]
+    F2["✅ Fase 2: Workspace & Multi-AI<br/>• Composer + Plan Wizard 3 Langkah<br/>• Wiki Mermaid, Mindmap & Kanban<br/>• BangunWeb AI Router & Multi-Provider"]
+    F3["✅ Fase 3: Billing & Optimasi<br/>• QRIS Statis → Dinamis (CRC16)<br/>• Optimasi Aset & SQLite WAL<br/>• GitHub Actions CI Otomatis"]
+    F4["🔜 Fase 4: Rencana Berikutnya<br/>• Auto-Verify Mutasi QRIS Webhook<br/>• Kolaborasi Tim & Diff Versi #v<br/>• Ekspor ke GitHub Issues / Linear"]
 
-### Fase 2 — Guided PRD Workspace & Multi-AI (Selesai)
-- [x] Composer beranda/dashboard (`Template`, `@ Referensi`, toggle `ID/EN`, dikte suara)
-- [x] **Plan Wizard** 3 langkah dengan preferensi stack & 5 pertanyaan klarifikasi adaptif
-- [x] Workspace 3 tampilan: **Wiki** (Mermaid SVG interaktif), **Roadmap Mindmap** (pan/zoom), dan **Kanban**
-- [x] Sidebar **Workspace Agent** (`Revisi PRD` + versioning `#v` & `Diskusi`) serta **Modal Implemen**
-- [x] Integrasi **BangunWeb AI Router** (termasuk `gpt-6.2-astra` & `gpt-6.2-sol`), Gemini, OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, Groq, dan mode `mock`
+    F1 --> F2 --> F3 --> F4
 
-### Fase 3 — Billing QRIS Dinamis, Optimasi & CI (Selesai)
-- [x] Konverter **QRIS Statis → QRIS Dinamis** (nominal unik 3 digit + CRC16 EMVCo) + konfirmasi & approval admin
-- [x] Optimasi aset gambar, header keamanan/cache Next.js, dan indeks SQLite WAL
-- [x] GitHub Actions CI otomatis (`typecheck`, `lint`, `node --test`, `next build`)
+    style F1 fill:#0f291e,stroke:#22c55e,color:#ecfdf5
+    style F2 fill:#0f291e,stroke:#22c55e,color:#ecfdf5
+    style F3 fill:#0f291e,stroke:#22c55e,color:#ecfdf5
+    style F4 fill:#1e1b4b,stroke:#818cf8,color:#eef2ff
+```
 
-### Fase 4 — Rencana Berikutnya
-- [ ] Verifikasi mutasi QRIS otomatis via webhook/mutasi bank (tanpa approval manual admin)
-- [ ] Kolaborasi tim multi-user pada satu workspace PRD & riwayat diff antar versi `#v`
-- [ ] Ekspor langsung task breakdown ke GitHub Issues / Linear
+<details>
+<summary>Detail checklist tiap fase</summary>
+
+- **Fase 1 — Fondasi & Auth (Selesai):** Register/login + password strength meter, verifikasi OTP 6 digit, reset password, Google OAuth opsional, sesi revocable, dan enkripsi at-rest `AES-256-GCM`.
+- **Fase 2 — Guided PRD Workspace & Multi-AI (Selesai):** Composer (`Template`, `@ Referensi`, `ID/EN`, dikte suara), Plan Wizard 3 langkah, Wiki Mermaid + Roadmap Mindmap + Kanban, Workspace Agent (`Revisi PRD` `#v` & `Diskusi`), Modal Implemen, serta BangunWeb AI Router (`gpt-6.2-astra`, `gpt-6.2-sol`), Gemini, OpenAI, OpenRouter, DeepSeek, Kimi, Qwen, Groq, dan `mock`.
+- **Fase 3 — Billing QRIS Dinamis, Optimasi & CI (Selesai):** Konverter QRIS Statis → Dinamis (kode unik 3 digit + CRC16 EMVCo) + konfirmasi & admin approve, optimasi gambar/header Next.js/SQLite WAL, dan GitHub Actions CI.
+- **Fase 4 — Rencana Berikutnya:** Verifikasi mutasi QRIS otomatis via webhook, kolaborasi tim multi-user & diff antar versi `#v`, serta ekspor langsung ke GitHub Issues / Linear.
+
+</details>
 
 ---
 
