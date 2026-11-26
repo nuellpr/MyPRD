@@ -49,13 +49,29 @@ export const PLANS: Record<PlanId, Plan> = {
     features: [
       "Akses model AI premium",
       "Export markdown + PDF",
-      "Priority support & diskon konsultasi",
+      "Priority support",
     ],
   },
 };
 
 export function getPlan(planId: string): Plan {
   return PLANS[planId as PlanId] ?? PLANS.free;
+}
+
+const PLAN_RANK: Record<PlanId, number> = { free: 0, starter: 1, pro: 2 };
+
+/**
+ * True kalau `candidate` boleh menggantikan `current` di kolom `users.plan`.
+ *
+ * `candidate` harus paket langganan yang benar-benar dikenal — order produk
+ * sekali bayar (mis. produk one-off) tidak punya rank dan tidak boleh menyentuh
+ * paket sama sekali. Paket saat ini selalu dinormalisasi lewat `getPlan`, jadi
+ * data lama dengan plan ngawur tidak membuat user terjebak turun ke free.
+ */
+export function isPlanUpgrade(current: string, candidate: string): boolean {
+  const to = PLAN_RANK[candidate as PlanId];
+  if (to === undefined) return false;
+  return to >= PLAN_RANK[getPlan(current).id];
 }
 
 export interface QuotaState {

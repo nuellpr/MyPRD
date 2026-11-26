@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { IconArrowRight, IconCheck, TemplateGlyph } from "@/components/icons";
 import { currentUser } from "@/lib/auth";
 import { getTemplate } from "@/lib/templates";
 
@@ -31,10 +32,13 @@ export default async function TemplateDetailPage({ params }: PageParams) {
         </Link>
 
         <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{template.name}</h1>
-            <p className="mt-1 text-sm text-slate-400">{template.tagline}</p>
-            <p className="mt-0.5 text-xs text-slate-500">v{template.version}</p>
+          <div className="flex items-start gap-3">
+            <TemplateGlyph slug={template.slug} />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{template.name}</h1>
+              <p className="mt-1 text-sm text-slate-400">{template.tagline}</p>
+              <p className="mt-0.5 text-xs text-slate-500">v{template.version}</p>
+            </div>
           </div>
           <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm text-emerald-300">{template.price}</span>
         </div>
@@ -58,8 +62,8 @@ export default async function TemplateDetailPage({ params }: PageParams) {
           <h2 className="font-semibold">Sudah ada di template</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-300">
             {template.includes.map((item) => (
-              <li key={item} className="flex gap-2">
-                <span className="text-emerald-400">✓</span>
+              <li key={item} className="flex items-start gap-2">
+                <IconCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
                 {item}
               </li>
             ))}
@@ -102,9 +106,10 @@ export default async function TemplateDetailPage({ params }: PageParams) {
         <div className="mt-8">
           <Link
             href={`/dashboard?template=${template.slug}`}
-            className="inline-block rounded-lg bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+            className="btn-shine inline-flex items-center gap-2 rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:brightness-110"
           >
             Bikin PRD dengan {template.name}
+            <IconArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </main>

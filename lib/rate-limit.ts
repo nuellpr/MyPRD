@@ -22,6 +22,15 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   const bucket = buckets.get(key) ?? { hits: [] };
   bucket.hits = bucket.hits.filter((t) => now - t < windowMs);
 
+  // Pembersihan selalu jalan, termasuk saat request diblokir: kalau hanya di
+  // jalur "allowed", penyerang yang terus kena limit tidak pernahapus bucket
+  // dan map tumbuh tanpa batas.
+  if (buckets.size > 5000) {
+    for (const [k, v] of buckets) {
+      if (v.hits.length === 0 || now - v.hits[v.hits.length - 1] > windowMs * 4) buckets.delete(k);
+    }
+  }
+
   if (bucket.hits.length >= limit) {
     const oldest = bucket.hits[0];
     buckets.set(key, bucket);
@@ -35,13 +44,6 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
 
   bucket.hits.push(now);
   buckets.set(key, bucket);
-
-  // Bersihkan bucket lama supaya memori tidak tumbuh terus.
-  if (buckets.size > 5000) {
-    for (const [k, v] of buckets) {
-      if (v.hits.length === 0 || now - v.hits[v.hits.length - 1] > windowMs * 4) buckets.delete(k);
-    }
-  }
 
   return { allowed: true, remaining: limit - bucket.hits.length, retryAfterSec: 0, limit };
 }

@@ -25,9 +25,9 @@ Dibangun sesuai `PRD-Platform-Bikin-PRD-AI-Coding.md`, fokus pada **Fase 1 MVP**
 | Pricing | ✅ | 3 tier (Free/Starter/Pro) di landing page |
 | Keamanan | ✅ | Enkripsi at-rest AES-256-GCM untuk chat & PRD, rate limiting, proteksi prompt injection, sanitasi input |
 | Monitoring biaya AI | ✅ | Tabel `usage_events` menyimpan token & estimasi biaya per request |
-| Billing (Midtrans) | ✅ | `/billing`: checkout Snap + webhook terverifikasi + mode simulasi mock tanpa merchant key |
-| Konsultasi & coaching | ✅ | `/konsultasi`: booking sesi 60 mnt Rp199rb bayar di muka, lunas → terjadwal otomatis |
-| Komunitas (leaderboard + lencana) / konsultasi | ✅ Papan peringkat + booking + link Discord aktif | [/komunitas](/komunitas) · [Gabung Discord](https://discord.gg/w3pn2Ey3P) |
+| Billing (Midtrans Snap / Mayar / mock) | ✅ | `/billing`: checkout Snap (signature webhook) atau Mayar (requery status, tanpa signature) + mode simulasi mock tanpa merchant key |
+| Komunitas (leaderboard + lencana) | ✅ Papan peringkat + link Discord aktif | [/komunitas](/komunitas) · [Gabung Discord](https://discord.gg/w3pn2Ey3P) |
+| Profil & pengaturan | ✅ | `/settings`: edit nama + pilih model/provider AI default; admin (ADMIN_EMAILS) dapat badge admin |
 
 ---
 
@@ -65,11 +65,11 @@ npm run lint       # eslint
 
 ## Konfigurasi AI
 
-Format model: `provider/model`, contoh `gemini/gemini-3.5-flash-lite`. Isi API key di `.env.local`; provider tanpa key otomatis disembunyikan dari pemilihan model.
+Format model: `provider/model`, contoh `gemini/gemini-3.8-flash`. Isi API key di `.env.local`; provider tanpa key otomatis disembunyikan dari pemilihan model.
 
 ```env
 GEMINI_API_KEY=AIza...
-AI_DEFAULT_MODEL=gemini/gemini-3.5-flash-lite
+AI_DEFAULT_MODEL=gemini/gemini-3.8-flash
 ```
 
 Provider yang didukung: `gemini`, `openai`, `openrouter`, `deepseek`, `kimi`, `qwen`, `groq`, dan `custom` (OpenAI-compatible apa pun lewat `CUSTOM_BASE_URL`). Semua lewat endpoint `POST {baseUrl}/chat/completions` dengan `stream: true`.
@@ -80,11 +80,11 @@ Gemini dipakai lewat **endpoint OpenAI-compatible resmi** Google (`https://gener
 
 ```env
 GEMINI_API_KEY=AIza...
-GEMINI_MODELS=gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash
-AI_DEFAULT_MODEL=gemini/gemini-3.5-flash-lite
+GEMINI_MODELS=gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash
+AI_DEFAULT_MODEL=gemini/gemini-3.8-flash
 ```
 
-Alias `GOOGLE_API_KEY` dan `GEMINI` juga dikenali. Model `gemini-3.5-flash-lite` cocok untuk kuota free tier (cepat + murah: ~$0.30/1M token input, ~$2.50/1M output); pakai `gemini-3.5-flash` bila butuh kualitas lebih tinggi.
+Alias `GOOGLE_API_KEY` dan `GEMINI` juga dikenali. Model `gemini-3.8-flash` adalah default (cepat + murah); `gemini-3.5-flash-lite` cocok untuk kuota free tier (cepat + murah: ~$0.30/1M token input, ~$2.50/1M output); pakai `gemini-3.5-flash` bila butuh kualitas lebih tinggi.
 
 Biaya per 1 juta token tiap provider didefinisikan di `lib/env.ts` dan dipakai untuk estimasi biaya di `usage_events`.
 
@@ -117,8 +117,8 @@ lib/
   pdf.ts         render PRD markdown → PDF A4 (pdf-lib, tanpa dependensi native)
   roadmap.ts     peta visual: fase dari dependensi, jalur kritis, daftar fitur
   db.ts          skema SQLite (node:sqlite)
-  repo.ts        repository project/message/prd/usage/order/booking
-  billing.ts     provider Midtrans Snap + mock, signature webhook, produk konsultasi
+  repo.ts        repository project/message/prd/usage/order
+   billing.ts     provider Midtrans Snap / Mayar / mock, signature + requery webhook
   auth.ts        sesi & password (user OAuth tersimpan tanpa password)
   oauth.ts       login Google: URL otorisasi, tukar code, profil, state HMAC
   crypto.ts      scrypt, HMAC session, AES-256-GCM
@@ -157,14 +157,10 @@ Semua dihitung di `lib/roadmap.ts` (murni fungsi, ada unit test) sehingga peta s
 
 - **Halaman `/billing`** (login dulu): pilih Starter (Rp49.000) / Pro (Rp149.000), riwayat order (menunggu/lunas/gagal/kedaluwarsa), tombol upgrade di dashboard.
 - **Midtrans Snap**: checkout membuat order `pending` + Snap token; user membayar lewat popup (QRIS/e-wallet/VA bank); `POST /api/billing/webhook` memverifikasi `signature_key` (SHA512) lalu menandai lunas + upgrade `users.plan`. Idempoten dan order lunas tidak pernah diturunkan.
+- **Mayar** (API V2, Single Payment Request): dipilih eksplisit lewat `BILLING_PROVIDER=mayar`. Checkout membuat payment request + `extraData.myprdOrderId` (kunci korelasi), lalu mengarahkan user ke halaman pembayaran Mayar. Host `.io` = sandbox, `.id` = produksi (API V1 dimatikan 1 Oktober 2026). Setup: `MAYAR_API_KEY` (Read & Write) + `MAYAR_IS_PRODUCTION`.
+- **Batasan webhook Mayar**: Mayar hanya menyimpan **satu** `urlHook` per akun merchant. Kalau akunmu sudah dipakai app lain, mendaftarkan webhook MyPRD akan mematikan notifikasi app itu. Karena itu alur Mayar ditutup lewat **tombol "Saya sudah bayar, cek status"** — `POST /api/billing/check-status` menanyakan `GET /hl/v2/payments/{id}` langsung ke API Mayar, jadi status tetap otoritatif dari Mayar, bukan klaim browser, dan order tetap idempoten. Kalau webhook memang tersedia (akun khusus MyPRD), `POST /api/billing/webhook` juga menangani `payment.received`: Mayar tidak menandatangani webhook, jadi server requery API-nya sendiri + mencocokkan nominal sebelum paket di-upgrade.
 - **Mode mock** (tanpa merchant key): order diselesaikan lewat tombol "Simulasikan bayar" — alur yang sama, cocok untuk dev/test lokal.
 - **Setup asli**: isi `MIDTRANS_SERVER_KEY` + `MIDTRANS_CLIENT_KEY` (mulai dari sandbox), daftarkan Payment Notification URL `https://domainmu/api/billing/webhook` di dashboard Midtrans. Webhook butuh URL publik (mis. via ngrok untuk coba lokal).
-
-### Konsultasi & coaching
-
-- **Halaman `/konsultasi`** (publik, form butuh login): sesi 1-on-1 60 menit Rp199.000, bayar di muka. Isi topik + kontak + jadwal yang diinginkan → booking `pending_payment` + order konsultasi (`consult-60`).
-- Pembayaran menumpang alur billing yang sama (Snap/mock + webhook terverifikasi); saat lunas, booking otomatis jadi `scheduled` via `repo.confirmBookingPayment`. Order konsultasi **tidak mengubah paket langganan** user (guard di `markOrderPaid`).
-- Booking yang belum dibayar bisa dibatalkan user; mentor menandai selesai lewat panel admin di bawah daftar booking (butuh `ADMIN_EMAILS=kamu@gmail.com` di `.env.local`, aksi `Tandai selesai` hanya untuk status terjadwal).
 
 ### Keamanan & batasan
 
@@ -187,7 +183,7 @@ Provider seperti Gemini free tier kadang butuh waktu lama sebelum token pertama,
 
 ## Data
 
-SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `sessions`, `projects`, `messages`, `prds`, `usage_events`, `orders`, `bookings`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
+SQLite di `data/myprd.db` (di-gitignore). Tabel: `users`, `sessions`, `projects`, `messages`, `prds`, `usage_events`, `orders`. Untuk pindah ke Postgres/Supabase, cukup ganti `lib/db.ts` — seluruh akses data lewat `lib/repo.ts`.
 
 Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND created_at >= awal bulan`, sehingga reset otomatis tanpa job terjadwal.
 
@@ -196,4 +192,4 @@ Kuota bulanan dihitung dari `COUNT(*) usage_events WHERE kind = 'prd' AND create
 ## Roadmap
 
 - **Fase 2** — ✅ billing Midtrans, ✅ template & starter kit (Next.js, TanStack, FastAPI); sisa: Xendit/Stripe, integrasi repo Git.
-- **Fase 3** — ✅ booking konsultasi + pembayaran di muka, leaderboard + lencana; sisa: Discord bot, eksekusi task otomatis.
+- **Fase 3** — ✅ leaderboard + lencana, profil & pengaturan model AI; sisa: Discord bot, eksekusi task otomatis.

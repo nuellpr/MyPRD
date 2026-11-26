@@ -115,10 +115,16 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
     if (!text || streaming || generating) return;
     setError("");
     setWarning("");
-    setMessages((prev) => [...prev, { id: `local_${Date.now()}`, role: "user", content: text, createdAt: Date.now() }]);
+    // Pesan user ditampilkan duluan supaya UI terasa responsif. Kalau request
+    // ditolak sebelum menyentuh server (401/429/400),server tidak menyimpannya
+    // jadi bubble ini harus dibuang lagi — kalau tidak, muncul di layar tapi
+    // hilang setelah reload.
+    const optimisticId = `local_${Date.now()}`;
+    setMessages((prev) => [...prev, { id: optimisticId, role: "user", content: text, createdAt: Date.now() }]);
     setStreamText("");
 
     let assistantText = "";
+    let saved = false;
     await post(
       `/api/projects/${project.id}/chat`,
       { message: text },
@@ -128,6 +134,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
           setStreamText(assistantText);
         },
         onDone: (data) => {
+          saved = true;
           setMessages((prev) => [
             ...prev,
             {
@@ -147,6 +154,9 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
         },
       },
     );
+    if (!saved) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+    }
   }
 
   // Kirim ide produk sebagai pesan pertama supaya AI langsung bertanya klarifikasi.
@@ -337,7 +347,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                 <div
                   className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm ${
                     message.role === "user"
-                      ? "bg-sky-500 text-slate-950"
+                      ? "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950"
                       : "border border-slate-800 bg-slate-950/70 text-slate-200"
                   }`}
                 >
@@ -384,7 +394,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
               <button
                 type="submit"
                 disabled={busy || !draft.trim()}
-                className="rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:bg-sky-400 disabled:opacity-50"
+                className="rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:brightness-110 disabled:opacity-50"
               >
                 Kirim
               </button>
@@ -428,7 +438,7 @@ export function Workspace({ project, initialMessages, initialPrd, quota, models 
                   type="button"
                   onClick={() => setTab(value)}
                   className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                    tab === value ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"
+                    tab === value ? "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950" : "text-slate-300 hover:text-white"
                   }`}
                 >
                   {label}

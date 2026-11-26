@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { IconArrowRight, TemplateGlyph } from "@/components/icons";
 import { currentUser } from "@/lib/auth";
 import { TEMPLATES, stackLine } from "@/lib/templates";
 
@@ -26,16 +27,19 @@ export default async function TemplatesPage() {
           {TEMPLATES.map((template) => (
             <article
               key={template.slug}
-              className="flex flex-col rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
+              className="reveal card-lift flex flex-col rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    <Link href={`/templates/${template.slug}`} className="hover:text-sky-300">
-                      {template.name}
-                    </Link>
-                  </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">Versi {template.version}</p>
+                <div className="flex items-start gap-3">
+                  <TemplateGlyph slug={template.slug} />
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      <Link href={`/templates/${template.slug}`} className="hover:text-sky-300">
+                        {template.name}
+                      </Link>
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">Versi {template.version}</p>
+                  </div>
                 </div>
                 <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-300">
                   {template.price}
@@ -46,9 +50,10 @@ export default async function TemplatesPage() {
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
                   href={`/templates/${template.slug}`}
-                  className="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                  className="btn-shine inline-flex items-center gap-1.5 rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"
                 >
                   Prompt install
+                  <IconArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href={`/dashboard?template=${template.slug}`}

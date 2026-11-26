@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
-import { errorToResponse, jsonOk, readJson } from "@/lib/http";
+import { findProvider, parseModelId } from "@/lib/env";
+import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { deleteProject, getProject, getQuotaState, getPrd, listMessages, updateProject } from "@/lib/repo";
 import { MAX_IDEA_CHARS, sanitizeUserText } from "@/lib/safety";
 
@@ -30,7 +31,14 @@ export async function PATCH(request: Request, { params }: Context) {
     const patch: Parameters<typeof updateProject>[2] = {};
     if (body.title !== undefined) patch.title = sanitizeUserText(body.title, 120) || "Project baru";
     if (body.idea !== undefined) patch.idea = sanitizeUserText(body.idea, MAX_IDEA_CHARS);
-    if (body.modelId !== undefined) patch.modelId = sanitizeUserText(body.modelId, 120);
+    if (body.modelId !== undefined) {
+      // Sama seperti POST /api/projects: modelId yang tidak dikenal provider
+      // akan ditolak 503 di lib/ai.ts saat generate, jadi jangan disimpan.
+      const requested = sanitizeUserText(body.modelId, 120);
+      const parsed = parseModelId(requested);
+      if (!parsed || !findProvider(parsed.providerId)) return jsonError("Model AI tidak dikenal.", 400);
+      patch.modelId = requested;
+    }
     if (body.language !== undefined) patch.language = body.language === "en" ? "en" : "id";
 
     const project = updateProject(user.id, id, patch);

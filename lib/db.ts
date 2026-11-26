@@ -16,6 +16,10 @@ export interface UserRow {
   name: string;
   password_hash: string | null; // null = user login via OAuth (tanpa password)
   plan: string;
+  default_model_id: string;
+  phone: string;
+  bio: string;
+  email_verified: number;
   created_at: number;
 }
 
@@ -60,18 +64,6 @@ export interface OrderRow {
   updated_at: number;
 }
 
-export interface BookingRow {
-  id: string;
-  user_id: string;
-  topic: string;
-  contact: string;
-  preferred_date: string;
-  status: string;
-  order_id: string;
-  created_at: number;
-  updated_at: number;
-}
-
 export interface UsageRow {
   id: string;
   user_id: string;
@@ -106,6 +98,10 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL DEFAULT '',
   password_hash TEXT, -- nullable: user OAuth tidak punya password
   plan          TEXT NOT NULL DEFAULT 'free',
+  default_model_id TEXT NOT NULL DEFAULT '',
+  phone         TEXT NOT NULL DEFAULT '',
+  bio           TEXT NOT NULL DEFAULT '',
+  email_verified INTEGER NOT NULL DEFAULT 1,
   created_at    INTEGER NOT NULL
 );
 
@@ -168,20 +164,6 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS bookings (
-  id             TEXT PRIMARY KEY,
-  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  topic          TEXT NOT NULL,
-  contact        TEXT NOT NULL DEFAULT '',
-  preferred_date TEXT NOT NULL DEFAULT '',
-  status         TEXT NOT NULL DEFAULT 'pending_payment',
-  order_id       TEXT NOT NULL DEFAULT '',
-  created_at     INTEGER NOT NULL,
-  updated_at     INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings(user_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_order ON bookings(order_id) WHERE order_id <> '';
-
 CREATE TABLE IF NOT EXISTS sessions (
   id         TEXT PRIMARY KEY,
   user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -189,6 +171,29 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_reset_expires ON password_reset_tokens(expires_at);
+
+CREATE TABLE IF NOT EXISTS otp_codes (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  email      TEXT NOT NULL,
+  purpose    TEXT NOT NULL,
+  code_hash  TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at    INTEGER,
+  attempts   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
 `;
 
 function initDb(): DatabaseSync {
@@ -200,7 +205,12 @@ function initDb(): DatabaseSync {
   db.exec(SCHEMA);
   sweepStaleUsageReservations(db);
   sweepExpiredSessions(db);
+  sweepPasswordResetTokens(db);
+  sweepOtpCodes(db);
   migrateUsersPasswordNullable(db);
+  migrateUsersDefaultModel(db);
+  migrateUserProfile(db);
+  migrateEmailVerified(db);
   return db;
 }
 
@@ -225,26 +235,74 @@ function sweepExpiredSessions(db: DatabaseSync): void {
  * Migrasi sekali jalan: DB lama punya `password_hash NOT NULL`, rebuild
  * tabel agar user OAuth (tanpa password) bisa disimpan sebagai NULL.
  * No-op untuk DB baru maupun yang sudah termigrasi.
+ *
+ * Dilakukan dalam satu transaksi: `DROP TABLE users` lewat `ON DELETE
+ * CASCADE` ke projects/messages/... adalah destruktif, jadi kalau proses
+ * mati di tengah, DB harus tetap utuh (bukan setengah jadi tanpa tabel users
+ * — yang di boot berikutnya akan dibuat ulang kosong oleh SCHEMA).
  */
 export function migrateUsersPasswordNullable(db: DatabaseSync): void {
   const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string; notnull: number }[];
   if (cols.find((c) => c.name === "password_hash")?.notnull !== 1) return;
-  db.exec(`
-    PRAGMA foreign_keys = OFF;
-    CREATE TABLE users_new (
-      id            TEXT PRIMARY KEY,
-      email         TEXT NOT NULL UNIQUE,
-      name          TEXT NOT NULL DEFAULT '',
-      password_hash TEXT,
-      plan          TEXT NOT NULL DEFAULT 'free',
-      created_at    INTEGER NOT NULL
-    );
-    INSERT INTO users_new (id, email, name, password_hash, plan, created_at)
-      SELECT id, email, name, password_hash, plan, created_at FROM users;
-    DROP TABLE users;
-    ALTER TABLE users_new RENAME TO users;
-    PRAGMA foreign_keys = ON;
-  `);
+  // PRAGMA foreign_keys tidak berlaku di dalam transaksi, jadi dimatikan dulu.
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.exec(`
+      BEGIN;
+      CREATE TABLE users_new (
+        id            TEXT PRIMARY KEY,
+        email         TEXT NOT NULL UNIQUE,
+        name          TEXT NOT NULL DEFAULT '',
+        password_hash TEXT,
+        plan          TEXT NOT NULL DEFAULT 'free',
+        created_at    INTEGER NOT NULL
+      );
+      INSERT INTO users_new (id, email, name, password_hash, plan, created_at)
+        SELECT id, email, name, password_hash, plan, created_at FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+      COMMIT;
+    `);
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+/** Migrasi aditif: simpan model AI default pilihan user. */
+export function migrateUsersDefaultModel(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  if (cols.some((c) => c.name === "default_model_id")) return;
+  db.exec("ALTER TABLE users ADD COLUMN default_model_id TEXT NOT NULL DEFAULT ''");
+}
+
+/** Migrasi aditif: kolom detail profil (telepon & bio). */
+export function migrateUserProfile(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "phone")) db.exec("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''");
+  if (!cols.some((c) => c.name === "bio")) db.exec("ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+}
+
+/** Bersihkan token reset yang sudah kedaluwarsa atau terpakai (> 1 hari). */
+function sweepPasswordResetTokens(db: DatabaseSync): void {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  db.prepare("DELETE FROM password_reset_tokens WHERE expires_at < ? OR (used_at IS NOT NULL AND used_at < ?)").run(cutoff, cutoff);
+}
+
+/** Bersihkan kode OTP yang kedaluwarsa atau terpakai (> 1 hari). */
+function sweepOtpCodes(db: DatabaseSync): void {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  db.prepare("DELETE FROM otp_codes WHERE expires_at < ? OR (used_at IS NOT NULL AND used_at < ?)").run(cutoff, cutoff);
+}
+
+/** Migrasi aditif: flag verifikasi email (user lama dianggap terverifikasi). */
+export function migrateEmailVerified(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "email_verified")) {
+    db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1");
+  }
 }
 
 export function getDb(): DatabaseSync {

@@ -186,3 +186,33 @@ test("getUsageSummary mengagregasi total & per model", () => {
   assert.ok(mock);
   assert.ok(mock!.events >= 3);
 });
+
+test("markOrderPaid upgrade paket, tidak pernah menurunkan, dan idempoten", () => {
+  const setPlan = (plan: string) =>
+    getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(plan, userId);
+
+  // Order produk one-off (plan non-langganan) tidak boleh mengubah paket.
+  setPlan("free");
+  const consult = repo.createOrder({ userId, plan: "consult-60", amountIdr: 199000, provider: "mock" });
+  repo.markOrderPaid(consult.id);
+  assert.equal(repo.getUserPlan(userId), "free");
+
+  // Order subscription menupgrade paket.
+  setPlan("free");
+  const starter = repo.createOrder({ userId, plan: "starter", amountIdr: 49000, provider: "mock" });
+  repo.markOrderPaid(starter.id);
+  assert.equal(repo.getUserPlan(userId), "starter");
+
+  // Renewal starter saat sudah starter tetap idempoten.
+  repo.markOrderPaid(starter.id);
+  assert.equal(repo.getUserPlan(userId), "starter");
+
+  // Orang yang sudah pro tidak boleh turun ke starter walau order-nya lunas.
+  setPlan("pro");
+  const downgrade = repo.createOrder({ userId, plan: "starter", amountIdr: 49000, provider: "mock" });
+  const paid = repo.markOrderPaid(downgrade.id);
+  assert.equal(paid?.order.status, "paid");
+  assert.equal(repo.getUserPlan(userId), "pro");
+
+  setPlan("free");
+});

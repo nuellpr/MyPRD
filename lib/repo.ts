@@ -4,9 +4,9 @@
  * Isi pesan & PRD disimpan terenkripsi (AES-256-GCM) di kolom `*_enc`,
  * lalu didekripsi saat dibaca supaya tidak tersebar logika crypto di route.
  */
-import { getDb, startOfMonthMs, type BookingRow, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type SessionRow, type UserRow } from "./db.ts";
+import { getDb, startOfMonthMs, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type SessionRow, type UserRow } from "./db.ts";
 import { decryptContent, encryptContent, newId } from "./crypto.ts";
-import { evaluateQuota, getPlan, type QuotaState } from "./plans.ts";
+import { evaluateQuota, isPlanUpgrade, type QuotaState } from "./plans.ts";
 
 export interface Project {
   id: string;
@@ -351,16 +351,20 @@ export function setOrderProviderRef(orderId: string, ref: string): void {
 
 /**
  * Tandai order lunas + upgrade paket user (hanya untuk order langganan
- * starter/pro — order produk sekali bayar seperti konsultasi tidak mengubah
- * paket). Idempoten: kalau order sudah `paid`, tidak ada perubahan dan
+ * starter/pro — produk sekali bayar tidak mengubah paket). Idempoten: kalau
+ * order sudah `paid`, tidak ada perubahan dan
  * `alreadyPaid` true (notifikasi ganda aman).
+ *
+ * Paket tidak pernah turun: user yang sudah pro dan membeli starter tetap pro
+ * (order tetap tercatat lunas, jadi refund/manual downgrade Place untuk
+ * menurunkan paket).
  */
 export function markOrderPaid(orderId: string): { order: Order; alreadyPaid: boolean } | null {
   const order = getOrderById(orderId);
   if (!order) return null;
   if (order.status === "paid") return { order, alreadyPaid: true };
   getDb().prepare("UPDATE orders SET status = 'paid', updated_at = ? WHERE id = ?").run(Date.now(), orderId);
-  if (order.plan === "starter" || order.plan === "pro") {
+  if (isPlanUpgrade(getUserPlan(order.userId), order.plan)) {
     getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(order.plan, order.userId);
   }
   const updated = getOrderById(orderId);
@@ -379,8 +383,9 @@ export function setOrderStatus(orderId: string, status: "failed" | "expired"): O
   return getOrderById(orderId);
 }
 
-export function updateUserPlan(userId: string, plan: string): void {
-  getDb().prepare("UPDATE users SET plan = ? WHERE id = ?").run(getPlan(plan).id, userId);
+export function getUserPlan(userId: string): string {
+  const row = getDb().prepare("SELECT plan FROM users WHERE id = ?").get(userId) as { plan: string } | undefined;
+  return row?.plan ?? "free";
 }
 
 /**
@@ -398,11 +403,17 @@ export function findOrCreateOAuthUser(email: string, name: string): UserRow {
     name: name.trim() || normalized.split("@")[0],
     password_hash: null,
     plan: "free",
+    default_model_id: "",
+    phone: "",
+    bio: "",
+    email_verified: 0,
     created_at: Date.now(),
   };
   getDb()
-    .prepare("INSERT INTO users (id, email, name, password_hash, plan, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(row.id, row.email, row.name, row.password_hash, row.plan, row.created_at);
+    .prepare(
+      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, phone, bio, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    .run(row.id, row.email, row.name, row.password_hash, row.plan, row.default_model_id, row.phone, row.bio, row.email_verified, row.created_at);
   return row;
 }
 
@@ -439,114 +450,4 @@ export function revokeSession(sessionId: string): void {
   getDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
 }
 
-export type BookingStatus = "pending_payment" | "scheduled" | "done" | "cancelled";
 
-export interface Booking {
-  id: string;
-  userId: string;
-  topic: string;
-  contact: string;
-  preferredDate: string;
-  status: BookingStatus;
-  orderId: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
-function toBooking(row: BookingRow): Booking {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    topic: row.topic,
-    contact: row.contact,
-    preferredDate: row.preferred_date,
-    status: row.status as BookingStatus,
-    orderId: row.order_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export function createBooking(input: { userId: string; topic: string; contact: string; preferredDate: string }): Booking {
-  const now = Date.now();
-  const row: BookingRow = {
-    id: newId("bkg"),
-    user_id: input.userId,
-    topic: input.topic,
-    contact: input.contact,
-    preferred_date: input.preferredDate,
-    status: "pending_payment",
-    order_id: "",
-    created_at: now,
-    updated_at: now,
-  };
-  getDb()
-    .prepare(
-      "INSERT INTO bookings (id, user_id, topic, contact, preferred_date, status, order_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    .run(row.id, row.user_id, row.topic, row.contact, row.preferred_date, row.status, row.order_id, row.created_at, row.updated_at);
-  return toBooking(row);
-}
-
-export function getBooking(userId: string, bookingId: string): Booking | null {
-  const row = getDb().prepare("SELECT * FROM bookings WHERE id = ? AND user_id = ?").get(bookingId, userId) as
-    | BookingRow
-    | undefined;
-  return row ? toBooking(row) : null;
-}
-
-export function listBookings(userId: string): Booking[] {
-  const rows = getDb().prepare("SELECT * FROM bookings WHERE user_id = ? ORDER BY created_at DESC").all(userId) as unknown as BookingRow[];
-  return rows.map(toBooking);
-}
-
-export interface AdminBooking extends Booking {
-  userEmail: string;
-}
-
-/** Semua booking + email pemilik (khusus mentor/admin). */
-export function listAllBookings(limit = 100): AdminBooking[] {
-  const rows = getDb()
-    .prepare(
-      "SELECT b.*, u.email AS user_email FROM bookings b JOIN users u ON u.id = b.user_id ORDER BY b.created_at DESC LIMIT ?",
-    )
-    .all(limit) as unknown as (BookingRow & { user_email: string })[];
-  return rows.map((row) => ({ ...toBooking(row), userEmail: row.user_email }));
-}
-
-/** Tandai booking terjadwal sebagai selesai (mentor; hanya dari status scheduled). */
-export function completeBooking(bookingId: string): Booking | null {
-  const row = getDb().prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId) as BookingRow | undefined;
-  if (!row || row.status !== "scheduled") return null;
-  getDb().prepare("UPDATE bookings SET status = 'done', updated_at = ? WHERE id = ?").run(Date.now(), bookingId);
-  const after = getDb().prepare("SELECT * FROM bookings WHERE id = ?").get(bookingId) as BookingRow | undefined;
-  return after ? toBooking(after) : null;
-}
-
-export function linkBookingOrder(bookingId: string, orderId: string): void {
-  getDb().prepare("UPDATE bookings SET order_id = ?, updated_at = ? WHERE id = ?").run(orderId, Date.now(), bookingId);
-}
-
-/**
- * Lunasi order + jadwalkan booking yang tertaut (status → `scheduled`).
- * Dipakai webhook Midtrans & mock-complete supaya kedua sisi konsisten.
- */
-export function confirmBookingPayment(orderId: string): { order: Order; alreadyPaid: boolean } | null {
-  const result = markOrderPaid(orderId);
-  if (!result) return null;
-  getDb()
-    .prepare("UPDATE bookings SET status = 'scheduled', updated_at = ? WHERE order_id = ? AND status = 'pending_payment'")
-    .run(Date.now(), orderId);
-  const updated = getOrderById(orderId);
-  if (!updated) return null;
-  return { order: updated, alreadyPaid: result.alreadyPaid };
-}
-
-/** Batalkan booking yang belum dibayar (hanya dari status pending_payment). */
-export function cancelBooking(userId: string, bookingId: string): Booking | null {
-  const booking = getBooking(userId, bookingId);
-  if (!booking || booking.status !== "pending_payment") return booking;
-  getDb().prepare("UPDATE bookings SET status = 'cancelled', updated_at = ? WHERE id = ?").run(Date.now(), bookingId);
-  const after = getBooking(userId, bookingId);
-  return after;
-}

@@ -78,36 +78,49 @@ export default async function HomePage() {
 
       <main className="flex-1">
         <section className="relative overflow-hidden border-b border-slate-800/80">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute -top-40 left-1/2 h-80 w-[46rem] -translate-x-1/2 rounded-full bg-sky-500/20 blur-3xl"
-          />
-          <div className="mx-auto max-w-6xl px-4 py-20 text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="orb orb-a" />
+            <div className="orb orb-b" />
+          </div>
+          <div className="relative mx-auto max-w-6xl px-4 py-20 text-center">
+            <span className="hero-in inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
               Untuk developer Indonesia · vibe coding tanpa hasil ngawur
             </span>
-            <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-              Dari ide ke <span className="text-sky-400">PRD siap eksekusi</span> dalam hitungan menit
+            <h1
+              className="hero-in mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
+              style={{ animationDelay: "90ms" }}
+            >
+              Dari ide ke{" "}
+              <span className="text-shimmer bg-linear-to-r from-sky-400 via-cyan-300 to-violet-400 bg-clip-text text-transparent">
+                PRD siap eksekusi
+              </span>{" "}
+              dalam hitungan menit
             </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-base text-slate-300 sm:text-lg">
+            <p
+              className="hero-in mx-auto mt-5 max-w-2xl text-base text-slate-300 sm:text-lg"
+              style={{ animationDelay: "180ms" }}
+            >
               Ngobrol santai soal idemu, jawab beberapa pertanyaan, lalu dapat PRD lengkap + task breakdown yang bisa
               langsung ditempel ke Claude Code, Cursor, atau OpenCode.
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <div
+              className="hero-in mt-8 flex flex-wrap items-center justify-center gap-3"
+              style={{ animationDelay: "270ms" }}
+            >
               <Link
                 href={user ? "/dashboard" : "/register"}
-                className="rounded-lg bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                className="btn-shine rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:brightness-110"
               >
                 {user ? "Buka dashboard" : "Bikin PRD pertama (gratis)"}
               </Link>
               <a
                 href="#cara-kerja"
-                className="rounded-lg border border-slate-700 px-6 py-3 text-sm font-medium text-slate-200 transition hover:border-slate-500"
+                className="rounded-lg border border-slate-700 px-6 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-400/60 hover:text-white"
               >
                 Lihat cara kerjanya
               </a>
             </div>
-            <p className="mt-4 text-xs text-slate-500">
+            <p className="hero-in mt-4 text-xs text-slate-500" style={{ animationDelay: "360ms" }}>
               Tanpa kartu kredit · Bisa dicoba tanpa API key (mode demo) · Export markdown & PDF
             </p>
           </div>
@@ -120,7 +133,10 @@ export default async function HomePage() {
           </p>
           <div className="mt-10 grid gap-5 md:grid-cols-3">
             {STEPS.map((step) => (
-              <div key={step.title} className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
+              <div
+                key={step.title}
+                className="reveal card-lift rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
+              >
                 <h3 className="font-semibold text-sky-300">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-slate-300">{step.body}</p>
               </div>
@@ -133,7 +149,10 @@ export default async function HomePage() {
             <h2 className="text-center text-2xl font-semibold sm:text-3xl">Yang kamu dapat</h2>
             <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((feature) => (
-                <div key={feature.title} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-6">
+                <div
+                  key={feature.title}
+                  className="reveal card-lift rounded-2xl border border-slate-800 bg-slate-950/60 p-6"
+                >
                   <h3 className="font-semibold">{feature.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
                   {"href" in feature && typeof feature.href === "string" ? (
@@ -165,7 +184,10 @@ export default async function HomePage() {
             <h2 className="text-center text-2xl font-semibold sm:text-3xl">FAQ</h2>
             <div className="mt-8 space-y-4">
               {FAQ.map((item) => (
-                <details key={item.q} className="group rounded-xl border border-slate-800 bg-slate-950/60 p-5">
+                <details
+                  key={item.q}
+                  className="card-lift group rounded-xl border border-slate-800 bg-slate-950/60 p-5"
+                >
                   <summary className="cursor-pointer list-none font-medium text-slate-100 marker:hidden">
                     <span className="mr-2 text-sky-400 group-open:hidden">+</span>
                     <span className="mr-2 hidden text-sky-400 group-open:inline">−</span>

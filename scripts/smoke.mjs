@@ -113,6 +113,11 @@ async function main() {
       APP_SECRET: process.env.APP_SECRET ?? "smoke-test-secret-1234567890abcdef",
       DATABASE_PATH: DB_PATH,
       FREE_MONTHLY_QUOTA: "2",
+      //(next start memuat .env.local) — smoke WAJIB lewat jalur mock, jangan
+      // ikut provider asli yang kebawa dari .env.local mesin developer.
+      BILLING_PROVIDER: "mock",
+      MAYAR_API_KEY: "",
+      MIDTRANS_SERVER_KEY: "",
       AI_DEFAULT_MODEL: "mock/myprd-demo",
       ADMIN_EMAILS: email,
     },
@@ -196,6 +201,14 @@ async function main() {
     check("modelId tidak valid fallback ke default", injectedBody.project?.modelId === models.defaultModel);
     check("marker [[SIAP_PRD]] dibersihkan dari ide", !String(injectedBody.project?.idea).includes("[[SIAP_PRD]]"));
 
+    const badModel = await api(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ modelId: "ngawur/tidak-ada" }),
+    });
+    check("PATCH modelId tidak dikenal → 400", badModel.status === 400, `status ${badModel.status}`);
+    const stillOk = await json(await api(`/api/projects/${projectId}`));
+    check("modelId project tidak ikut berubah", stillOk.project?.modelId === models.defaultModel);
+
     section("4. Chat dengan AI (SSE)");
     const chatRes = await api(`/api/projects/${projectId}/chat`, {
       method: "POST",
@@ -251,6 +264,14 @@ async function main() {
 
     const tasksMd = await (await api(`/api/projects/${projectId}/export?format=tasks-md`)).text();
     check("export tasks-md berisi checklist", /- \[ \] T1/.test(tasksMd) || tasksMd.includes("Task Breakdown"));
+
+    const tasksJsonRes = await api(`/api/projects/${projectId}/export?format=tasks-json`);
+    const tasksJson = await json(tasksJsonRes);
+    check(
+      "export tasks-json berisi daftar task",
+      tasksJsonRes.status === 200 && Array.isArray(tasksJson.tasks) && tasksJson.tasks.length > 0,
+      `status ${tasksJsonRes.status} tasks=${tasksJson.tasks?.length}`,
+    );
 
     const badFormat = await api(`/api/projects/${projectId}/export?format=ngawur`);
     check("format export tidak dikenal → 400", badFormat.status === 400, `status ${badFormat.status}`);

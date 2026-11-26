@@ -104,3 +104,8 @@ export function newId(prefix: string): string {
 export function fingerprint(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex").slice(0, 12);
 }
+
+/** Kode OTP 6 digit, aman kriptografis. */
+export function generateOtp(): string {
+  return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+}

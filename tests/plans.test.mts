@@ -3,7 +3,7 @@ import test from "node:test";
 
 process.env.FREE_MONTHLY_QUOTA = "5";
 
-const { PLANS, getPlan, evaluateQuota, estimateCostUsd, estimateTokens } = await import("../lib/plans.ts");
+const { PLANS, getPlan, isPlanUpgrade, evaluateQuota, estimateCostUsd, estimateTokens } = await import("../lib/plans.ts");
 
 test("PLANS punya minimal 3 tier sesuai PRD (free/starter/pro)", () => {
   assert.deepEqual(Object.keys(PLANS).sort(), ["free", "pro", "starter"]);
@@ -19,6 +19,22 @@ test("kuota free tier mengikuti env FREE_MONTHLY_QUOTA", () => {
 test("getPlan fallback ke free untuk plan tak dikenal", () => {
   assert.equal(getPlan("enterprise-ngawur").id, "free");
   assert.equal(getPlan("pro").id, "pro");
+});
+
+test("isPlanUpgrade hanya meloloskan paket yang sama atau lebih tinggi", () => {
+  assert.equal(isPlanUpgrade("free", "starter"), true);
+  assert.equal(isPlanUpgrade("free", "pro"), true);
+  assert.equal(isPlanUpgrade("starter", "starter"), true);
+  assert.equal(isPlanUpgrade("pro", "pro"), true);
+  // Renewal starter oleh user pro tidak boleh menurunkan paket.
+  assert.equal(isPlanUpgrade("pro", "starter"), false);
+  assert.equal(isPlanUpgrade("starter", "free"), false);
+  // Plan tak dikenal dianggap free, jadi tidak menurunkan apa pun yang nyata.
+  assert.equal(isPlanUpgrade("pro", "enterprise-ngawur"), false);
+  assert.equal(isPlanUpgrade("enterprise-ngawur", "pro"), true);
+  // Order produk sekali bayar tidak boleh menyentuh paket.
+  assert.equal(isPlanUpgrade("free", "consult-60"), false);
+  assert.equal(isPlanUpgrade("starter", "consult-60"), false);
 });
 
 test("evaluateQuota menghitung sisa kuota dan resetsAt awal bulan berikutnya", () => {

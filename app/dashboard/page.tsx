@@ -6,7 +6,8 @@ import { NewProjectForm, type ModelOption } from "@/components/NewProjectForm";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser, toPublicUser } from "@/lib/auth";
 import { badgesForStats, getUserStats } from "@/lib/community";
-import { defaultModelId, getAvailableProviders } from "@/lib/env";
+import { defaultModelId, getAvailableProviders, isAdminEmail } from "@/lib/env";
+import { IconSettings, IconShield } from "@/components/icons";
 import { formatDate } from "@/lib/format";
 import { getPlan } from "@/lib/plans";
 import { getQuotaState, listProjects } from "@/lib/repo";
@@ -29,8 +30,12 @@ export default async function DashboardPage() {
     label: p.label,
     models: p.models.map((model) => ({ id: `${p.id}/${model}`, model })),
   }));
+  const availableModelIds = new Set(providers.flatMap((provider) => provider.models.map((model) => model.id)));
+  const initialModel =
+    user.default_model_id && availableModelIds.has(user.default_model_id) ? user.default_model_id : defaultModelId();
   const quotaPercent = quota.limit > 0 ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0;
   const badges = badgesForStats(getUserStats(user.id));
+  const admin = isAdminEmail(user.email);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -52,13 +57,32 @@ export default async function DashboardPage() {
         </div>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Akun saya</p>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-medium">{publicUser.name}</p>
-              <p className="text-sm text-slate-400">{publicUser.email}</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-sky-500 to-violet-400 text-base font-bold text-slate-950">
+                {(publicUser.name || publicUser.email).trim().charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate font-medium">{publicUser.name}</p>
+                  {admin ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/15 px-2 py-0.5 text-[11px] text-violet-200">
+                      <IconShield className="h-3 w-3" /> Admin
+                    </span>
+                  ) : null}
+                </div>
+                <p className="truncate text-sm text-slate-400">{publicUser.email}</p>
+              </div>
             </div>
-            <LogoutButton />
+            <div className="flex items-center gap-2">
+              <Link
+                href="/settings"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 transition hover:border-sky-400/60 hover:text-white"
+              >
+                <IconSettings className="h-4 w-4" /> Pengaturan
+              </Link>
+              <LogoutButton />
+            </div>
           </div>
         </section>
 
@@ -71,7 +95,7 @@ export default async function DashboardPage() {
             </p>
             <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
               <div
-                className={`h-full rounded-full ${quotaPercent >= 90 ? "bg-red-500" : "bg-sky-500"}`}
+                className={`h-full rounded-full ${quotaPercent >= 90 ? "bg-red-500" : "bg-linear-to-r from-sky-500 to-violet-400"}`}
                 style={{ width: `${quotaPercent}%` }}
               />
             </div>
@@ -91,14 +115,6 @@ export default async function DashboardPage() {
             <p className="mt-2 text-sm text-slate-300">Starter kit siap pakai + prompt install untuk AI agent.</p>
             <Link href="/templates" className="mt-3 inline-block text-sm text-sky-400 hover:underline">
               Lihat template →
-            </Link>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Konsultasi</p>
-            <p className="mt-2 text-sm text-slate-300">Sesi 1-on-1 60 menit: review PRD & arahan eksekusi.</p>
-            <Link href="/konsultasi" className="mt-3 inline-block text-sm text-sky-400 hover:underline">
-              Booking sesi →
             </Link>
           </div>
 
@@ -146,7 +162,7 @@ export default async function DashboardPage() {
 
         <section className="mt-8">
           <Suspense>
-            <NewProjectForm providers={providers} defaultModel={defaultModelId()} />
+            <NewProjectForm providers={providers} defaultModel={initialModel} />
           </Suspense>
         </section>
 
@@ -162,7 +178,7 @@ export default async function DashboardPage() {
                 <li key={project.id}>
                   <Link
                     href={`/dashboard/${project.id}`}
-                    className="block rounded-2xl border border-slate-800 bg-slate-900/40 p-5 transition hover:border-sky-500/60"
+                    className="card-lift block rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="font-medium">{project.title}</h3>

@@ -82,7 +82,7 @@ test("provider gemini muncul saat GEMINI_API_KEY diisi (endpoint OpenAI-compatib
     const gemini = getAvailableProviders().find((p) => p.id === "gemini");
     assert.ok(gemini, "provider gemini harus tersedia");
     assert.equal(gemini?.baseUrl, "https://generativelanguage.googleapis.com/v1beta/openai");
-    assert.ok(gemini?.models.includes("gemini-3.5-flash-lite"), "model default harus memuat gemini-3.5-flash-lite");
+    assert.ok(gemini?.models.includes("gemini-3.8-flash"), "model default harus memuat gemini-3.8-flash");
     assert.equal(findProvider("gemini")?.label, "Google Gemini");
   } finally {
     delete process.env.GEMINI_API_KEY;
@@ -108,7 +108,7 @@ test("provider gemini juga membaca alias GOOGLE_API_KEY dan GEMINI", () => {
 test("defaultModelId memakai gemini kalau hanya gemini yang punya key", () => {
   process.env.GEMINI_API_KEY = "dummy-gemini-key";
   try {
-    assert.equal(defaultModelId(), "gemini/gemini-3.5-flash-lite");
+    assert.equal(defaultModelId(), "gemini/gemini-3.8-flash");
   } finally {
     delete process.env.GEMINI_API_KEY;
   }

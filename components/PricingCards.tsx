@@ -12,14 +12,14 @@ export function PricingCards({ highlight }: { highlight?: PlanId }) {
         return (
           <div
             key={id}
-            className={`flex flex-col rounded-2xl border p-6 transition ${
+            className={`card-lift flex flex-col rounded-2xl border p-6 ${
               isHighlight ? "border-sky-500/70 bg-sky-500/5 shadow-lg shadow-sky-500/10" : "border-slate-800 bg-slate-900/40"
             }`}
           >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{plan.name}</h3>
               {id === "pro" ? (
-                <span className="rounded-full bg-indigo-500/15 px-2.5 py-1 text-xs font-medium text-indigo-300">Populer</span>
+                <span className="rounded-full bg-violet-500/15 px-2.5 py-1 text-xs font-medium text-violet-300">Populer</span>
               ) : null}
             </div>
             <p className="mt-3">
@@ -39,9 +39,9 @@ export function PricingCards({ highlight }: { highlight?: PlanId }) {
             </ul>
             <Link
               href={id === "free" ? "/register" : "/billing"}
-              className={`mt-6 rounded-lg px-4 py-2.5 text-center text-sm font-medium transition ${
+              className={`btn-shine mt-6 rounded-lg px-4 py-2.5 text-center text-sm font-medium transition ${
                 isHighlight
-                  ? "bg-sky-500 text-slate-950 hover:bg-sky-400"
+                  ? "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950 hover:brightness-110"
                   : "border border-slate-700 text-slate-200 hover:border-slate-500 hover:text-white"
               }`}
             >

@@ -21,7 +21,7 @@ export function CopyButton({ text, label = "Salin prompt install" }: { text: str
       type="button"
       onClick={handleCopy}
       className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition ${
-        copied ? "bg-emerald-500 text-slate-950" : "bg-sky-500 text-slate-950 hover:bg-sky-400"
+        copied ? "bg-emerald-500 text-slate-950" : "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950 hover:brightness-110"
       }`}
     >
       {copied ? "✓ Tersalin!" : label}

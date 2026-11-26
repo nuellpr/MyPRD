@@ -25,7 +25,7 @@ export default async function KomunitasPage() {
           href="https://discord.gg/w3pn2Ey3P"
           target="_blank"
           rel="noreferrer"
-          className="mt-4 inline-block rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-sky-400"
+          className="mt-4 inline-block rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:brightness-110"
         >
           Gabung Discord →
         </a>
@@ -70,7 +70,7 @@ export default async function KomunitasPage() {
             <p className="text-sm text-slate-300">Buat akun gratis untuk mulai mengejar peringkat.</p>
             <Link
               href="/register?next=/komunitas"
-              className="mt-4 inline-block rounded-lg bg-sky-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-sky-400"
+              className="mt-4 inline-block rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2 text-sm font-medium text-slate-950 transition hover:brightness-110"
             >
               Daftar gratis
             </Link>

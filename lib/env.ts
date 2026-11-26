@@ -49,7 +49,7 @@ export function getProviders(): ProviderConfig[] {
       label: "Google Gemini",
       baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
       apiKey: readKey("GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI"),
-      models: (process.env.GEMINI_MODELS ?? "gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash")
+      models: (process.env.GEMINI_MODELS ?? "gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.5-flash,gemini-2.5-flash")
         .split(",")
         .map((m) => m.trim())
         .filter(Boolean),
@@ -185,8 +185,8 @@ export function aiIdleTimeoutMs(): number {
 }
 
 /**
- * Email mentor/admin (dipisah koma, case-insensitive).
- * Admin bisa melihat semua booking konsultasi & menandainya selesai.
+ * Email admin (dipisah koma, case-insensitive). Admin mendapat badge admin
+ * di halaman pengaturan.
  */
 export function adminEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? "")

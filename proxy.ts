@@ -13,7 +13,10 @@ export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(SESSION_COOKIE);
   const { pathname } = request.nextUrl;
 
-  if (!hasSession && (pathname.startsWith("/dashboard") || pathname.startsWith("/billing"))) {
+  if (
+    !hasSession &&
+    (pathname.startsWith("/dashboard") || pathname.startsWith("/billing") || pathname.startsWith("/settings"))
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname)}`;
@@ -31,5 +34,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/billing/:path*", "/login", "/register"],
+  matcher: ["/dashboard/:path*", "/billing/:path*", "/settings", "/login", "/register"],
 };

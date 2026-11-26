@@ -73,7 +73,7 @@ export function NewProjectForm({ providers, defaultModel }: { providers: ModelOp
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+        className="rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:brightness-110"
       >
         + Bikin PRD Baru
       </button>
@@ -154,7 +154,7 @@ export function NewProjectForm({ providers, defaultModel }: { providers: ModelOp
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-60"
+          className="rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
         >
           {loading ? "Membuat..." : "Mulai ngobrol"}
         </button>

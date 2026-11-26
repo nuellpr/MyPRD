@@ -19,9 +19,13 @@ export function errorToResponse(error: unknown): Response {
   if (error instanceof ModelError) return jsonError(error.message, error.status);
   if (error instanceof BillingError) return jsonError(error.message, error.status);
   if (error instanceof OAuthError) return jsonError(error.message, error.status);
-  const message = error instanceof Error ? error.message : "Terjadi kesalahan tak terduga.";
-  console.error("[api]", message);
-  return jsonError(message, 500);
+  // Error domain di atas aman ditampilkan. Di bawah ini bisa berisi detail
+  // internal (SQL, path, isi response provider) jadi hanya dikirim saat dev;
+  // di produksi klien cukup tahu ada masalah, detailnya ada di log server.
+  const detail = error instanceof Error ? error.message : String(error);
+  console.error("[api]", error);
+  if (process.env.NODE_ENV === "production") return jsonError("Terjadi kesalahan di server. Coba lagi sebentar.", 500);
+  return jsonError(detail, 500);
 }
 
 export async function readJson<T>(request: Request): Promise<T> {
