@@ -1,6 +1,8 @@
-import { markOrderPaid, getOrderById, setOrderStatus } from "@/lib/repo";
+import { findUserById } from "@/lib/auth";
 import { mapMidtransStatus, mayarPaymentRequest, MAYAR_ORDER_KEY, verifyMidtransSignature } from "@/lib/billing";
+import { sendPaymentSuccessEmail } from "@/lib/billing-email";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
+import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
 
 /**
  * Webhook notifikasi pembayaran (tanpa auth sesi — dipanggil server gateway).
@@ -18,16 +20,17 @@ import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 export async function POST(request: Request) {
   try {
     const body = await readJson<Record<string, unknown>>(request);
+    const dashboardUrl = new URL("/dashboard", request.url).toString();
     if (typeof body.event === "string" && body.data && typeof body.data === "object") {
-      return await handleMayar(body.event, body.data as Record<string, unknown>);
+      return await handleMayar(body.event, body.data as Record<string, unknown>, dashboardUrl);
     }
-    return handleMidtrans(body);
+    return await handleMidtrans(body, dashboardUrl);
   } catch (error) {
     return errorToResponse(error);
   }
 }
 
-function handleMidtrans(body: Record<string, unknown>) {
+async function handleMidtrans(body: Record<string, unknown>, dashboardUrl: string) {
   const orderId = String(body.order_id ?? "");
   const statusCode = String(body.status_code ?? "");
   const grossAmount = String(body.gross_amount ?? "");
@@ -39,14 +42,28 @@ function handleMidtrans(body: Record<string, unknown>) {
   if (!order) return jsonError("Order tidak ditemukan.", 404);
   const next = mapMidtransStatus(String(body.transaction_status ?? ""), String(body.fraud_status ?? ""));
   if (next === "paid") {
-    markOrderPaid(orderId);
+    const result = markOrderPaid(orderId);
+    if (result && !result.alreadyPaid) {
+      const buyer = findUserById(order.userId);
+      if (buyer) {
+        await sendPaymentSuccessEmail({
+          to: buyer.email,
+          userName: buyer.name,
+          orderId: order.id,
+          planId: order.plan,
+          amountIdr: order.amountIdr,
+          provider: order.provider,
+          dashboardUrl,
+        });
+      }
+    }
   } else if (next === "failed" || next === "expired") {
     setOrderStatus(orderId, next);
   }
   return jsonOk({ ok: true });
 }
 
-async function handleMayar(event: string, data: Record<string, unknown>) {
+async function handleMayar(event: string, data: Record<string, unknown>, dashboardUrl: string) {
   // Hanya payment.received yang berarti uang masuk; sisanya (reminder,
   // membership, shipper) bukan urusan tagihan paket MyPRD.
   if (event !== "payment.received") return jsonOk({ ok: true, ignored: event });
@@ -68,6 +85,20 @@ async function handleMayar(event: string, data: Record<string, unknown>) {
     return jsonOk({ ok: true, verified: false, reason: "amount_mismatch" });
   }
 
-  markOrderPaid(orderId);
+  const result = markOrderPaid(orderId);
+  if (result && !result.alreadyPaid) {
+    const buyer = findUserById(order.userId);
+    if (buyer) {
+      await sendPaymentSuccessEmail({
+        to: buyer.email,
+        userName: buyer.name,
+        orderId: order.id,
+        planId: order.plan,
+        amountIdr: order.amountIdr,
+        provider: order.provider,
+        dashboardUrl,
+      });
+    }
+  }
   return jsonOk({ ok: true, verified: true });
 }

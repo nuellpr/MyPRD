@@ -29,7 +29,7 @@ export default async function ProjectPage({ params }: PageProps<"/dashboard/[id]
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <SiteHeader authed />
+      <SiteHeader authed floatingDock={false} />
       <Workspace
         project={{
           id: project.id,

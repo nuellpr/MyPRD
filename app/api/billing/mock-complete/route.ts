@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { BillingError, billingProvider } from "@/lib/billing";
+import { sendPaymentSuccessEmail } from "@/lib/billing-email";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { getOrder, markOrderPaid } from "@/lib/repo";
 
@@ -22,6 +23,17 @@ export async function POST(request: Request) {
     }
     const result = markOrderPaid(order.id);
     if (!result) return jsonError("Order tidak ditemukan.", 404);
+    if (!result.alreadyPaid) {
+      await sendPaymentSuccessEmail({
+        to: user.email,
+        userName: user.name,
+        orderId: order.id,
+        planId: order.plan,
+        amountIdr: order.amountIdr,
+        provider: order.provider,
+        dashboardUrl: new URL("/dashboard", request.url).toString(),
+      });
+    }
     return jsonOk({ order: result.order, alreadyPaid: result.alreadyPaid });
   } catch (error) {
     return errorToResponse(error);

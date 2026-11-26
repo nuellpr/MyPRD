@@ -7,6 +7,7 @@ import {
   createSnapTransaction,
   midtransClientKey,
 } from "@/lib/billing";
+import { sendOrderCreatedEmail } from "@/lib/billing-email";
 import { errorToResponse, jsonOk, readJson } from "@/lib/http";
 import {
   createDynamicQris,
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     const body = await readJson<{ plan?: string }>(request);
     const plan = checkoutPlan(String(body.plan ?? ""));
     const provider = billingProvider();
+    const billingUrl = new URL("/billing", request.url).toString();
 
     if (provider === "qris") {
       const staticPayload = qrisStaticPayload();
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
         renderQrisSvg(dynamicPayload),
         renderQrisDataUrl(dynamicPayload),
       ]);
+      const merchant = extractQrisMerchant(dynamicPayload);
       const providerRef = JSON.stringify({ payload: dynamicPayload });
       const order = createOrder({
         userId: user.id,
@@ -51,14 +54,28 @@ export async function POST(request: Request) {
         provider: "qris",
       });
       setOrderProviderRef(order.id, providerRef);
+      const emailNotified = await sendOrderCreatedEmail({
+        to: user.email,
+        userName: user.name,
+        orderId: order.id,
+        planId: plan.id,
+        amountIdr: uniqueAmount,
+        baseAmountIdr: plan.priceIdr,
+        uniqueCode: uniqueAmount - plan.priceIdr,
+        provider: "qris",
+        merchantName: merchant.merchantName,
+        nmid: merchant.nmid,
+        billingUrl,
+      });
       return jsonOk({
         order: { ...order, providerRef },
         provider,
+        emailNotified,
         qris: {
           payload: dynamicPayload,
           svg,
           qrDataUrl,
-          merchant: extractQrisMerchant(dynamicPayload),
+          merchant,
           baseAmountIdr: plan.priceIdr,
           uniqueCode: uniqueAmount - plan.priceIdr,
         },
@@ -75,14 +92,23 @@ export async function POST(request: Request) {
           description: `MyPRD ${plan.name} — langganan 1 bulan`,
           customerEmail: user.email,
           customerName: user.name,
-          redirectUrl: new URL("/billing", request.url).toString(),
+          redirectUrl: billingUrl,
         });
       } catch (error) {
         setOrderStatus(order.id, "failed");
         throw error;
       }
       setOrderProviderRef(order.id, payment.id);
-      return jsonOk({ order: { ...order, providerRef: payment.id }, provider, redirectUrl: payment.link });
+      const emailNotified = await sendOrderCreatedEmail({
+        to: user.email,
+        userName: user.name,
+        orderId: order.id,
+        planId: plan.id,
+        amountIdr: plan.priceIdr,
+        provider,
+        billingUrl,
+      });
+      return jsonOk({ order: { ...order, providerRef: payment.id }, provider, emailNotified, redirectUrl: payment.link });
     }
     if (provider === "midtrans") {
       let snap;
@@ -99,15 +125,34 @@ export async function POST(request: Request) {
         throw error;
       }
       setOrderProviderRef(order.id, snap.token);
+      const emailNotified = await sendOrderCreatedEmail({
+        to: user.email,
+        userName: user.name,
+        orderId: order.id,
+        planId: plan.id,
+        amountIdr: plan.priceIdr,
+        provider,
+        billingUrl,
+      });
       return jsonOk({
         order: { ...order, providerRef: snap.token },
         provider,
+        emailNotified,
         snapToken: snap.token,
         redirectUrl: snap.redirectUrl,
         clientKey: midtransClientKey(),
       });
     }
-    return jsonOk({ order, provider });
+    const emailNotified = await sendOrderCreatedEmail({
+      to: user.email,
+      userName: user.name,
+      orderId: order.id,
+      planId: plan.id,
+      amountIdr: plan.priceIdr,
+      provider,
+      billingUrl,
+    });
+    return jsonOk({ order, provider, emailNotified });
   } catch (error) {
     return errorToResponse(error);
   }

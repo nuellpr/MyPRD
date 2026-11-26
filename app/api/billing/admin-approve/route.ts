@@ -1,7 +1,6 @@
 import { findUserById, requireUser } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
+import { sendPaymentRejectedEmail, sendPaymentSuccessEmail } from "@/lib/billing-email";
 import { isAdminEmail } from "@/lib/env";
-import { formatIdr } from "@/lib/format";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
 
@@ -20,25 +19,35 @@ export async function POST(request: Request) {
     const order = getOrderById(String(body.order_id ?? ""));
     if (!order) return jsonError("Order tidak ditemukan.", 404);
 
+    const buyer = findUserById(order.userId);
     if (body.action === "reject") {
       const updated = setOrderStatus(order.id, "failed");
+      if (buyer && updated && updated.status === "failed" && order.status === "pending") {
+        await sendPaymentRejectedEmail({
+          to: buyer.email,
+          userName: buyer.name,
+          orderId: order.id,
+          planId: order.plan,
+          amountIdr: order.amountIdr,
+          billingUrl: new URL("/billing", request.url).toString(),
+        });
+      }
       return jsonOk({ order: updated });
     }
 
     const result = markOrderPaid(order.id);
     if (!result) return jsonError("Order tidak ditemukan.", 404);
 
-    const buyer = findUserById(order.userId);
     if (buyer && !result.alreadyPaid) {
-      await sendEmail({
+      await sendPaymentSuccessEmail({
         to: buyer.email,
-        subject: `Paket MyPRD ${order.plan} sudah aktif`,
-        html: `<p>Pembayaran QRIS kamu sebesar <strong>${formatIdr(
-          order.amountIdr,
-        )}</strong> (Order <code>${order.id}</code>) sudah diverifikasi.</p><p>Paket <strong>${
-          order.plan
-        }</strong> sekarang aktif di akunmu.</p>`,
-      }).catch(() => undefined);
+        userName: buyer.name,
+        orderId: order.id,
+        planId: order.plan,
+        amountIdr: order.amountIdr,
+        provider: order.provider,
+        dashboardUrl: new URL("/dashboard", request.url).toString(),
+      });
     }
 
     return jsonOk({ order: result.order, alreadyPaid: result.alreadyPaid });

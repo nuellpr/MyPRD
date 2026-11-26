@@ -186,7 +186,7 @@ export default async function HomePage() {
             <PricingCards highlight="free" />
           </div>
           <p className="mt-6 text-center text-xs text-slate-500">
-            Pembayaran lokal via Midtrans / Mayar (QRIS, e-wallet, transfer bank) — klik paket berbayar untuk checkout.
+            Pembayaran via QRIS (GoPay, ShopeePay, DANA, OVO, LinkAja &amp; m-Banking) — klik paket berbayar untuk checkout.
           </p>
         </section>
 

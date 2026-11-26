@@ -454,3 +454,62 @@ main { animation: page-in 0.45s ease-out both; }
     border-bottom-color: #cbd5e1 !important;
   }
 }
+
+/* Glassy Sidebar V10 (dock mengambang & curved cutout aktif) */
+.glassy-sidebar-shell {
+  background: linear-gradient(
+    180deg,
+    rgba(78, 128, 212, 0.34) 0%,
+    rgba(24, 46, 88, 0.44) 40%,
+    rgba(9, 15, 32, 0.78) 100%
+  );
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 24px 64px rgba(2, 6, 23, 0.65);
+}
+
+.glassy-active-cutout {
+  position: relative;
+}
+.glassy-active-cutout::before,
+.glassy-active-cutout::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.glassy-active-cutout::before {
+  top: -14px;
+  background: radial-gradient(circle at 0 0, transparent 14px, #ffffff 14.5px);
+}
+.glassy-active-cutout::after {
+  bottom: -14px;
+  background: radial-gradient(circle at 0 100%, transparent 14px, #ffffff 14.5px);
+}
+
+@keyframes qris-scan {
+  0%, 100% {
+    transform: translateY(14px);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(218px);
+    opacity: 0.85;
+  }
+}
+
+.qris-scanline {
+  animation: qris-scan 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qris-scanline {
+    animation: none;
+    display: none;
+  }
+}

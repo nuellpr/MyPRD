@@ -1,7 +1,8 @@
 import { requireUser } from "@/lib/auth";
 import { mayarPaymentRequest } from "@/lib/billing";
+import { sendPaymentSuccessEmail } from "@/lib/billing-email";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
-import { markOrderPaid, getOrder } from "@/lib/repo";
+import { getOrder, markOrderPaid } from "@/lib/repo";
 
 /**
  * POST /api/billing/check-status  body: { order_id }
@@ -24,7 +25,20 @@ export async function POST(request: Request) {
     if (!order.providerRef) return jsonError("Order ini belum punya referensi pembayaran.", 400);
 
     const payment = await mayarPaymentRequest(order.providerRef);
-    if (payment.status === "paid") markOrderPaid(order.id);
+    if (payment.status === "paid") {
+      const result = markOrderPaid(order.id);
+      if (result && !result.alreadyPaid) {
+        await sendPaymentSuccessEmail({
+          to: user.email,
+          userName: user.name,
+          orderId: order.id,
+          planId: order.plan,
+          amountIdr: order.amountIdr,
+          provider: order.provider,
+          dashboardUrl: new URL("/dashboard", request.url).toString(),
+        });
+      }
+    }
 
     return jsonOk({ status: payment.status, link: payment.link });
   } catch (error) {

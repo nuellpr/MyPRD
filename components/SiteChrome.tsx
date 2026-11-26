@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IconLayers, IconSettings, IconUser } from "./icons";
-import { MenuDrawer } from "./MenuDrawer";
+import { GlassySidebar } from "./GlassySidebar";
 import { CountUp } from "./motion/CountUp";
 
 export interface HeaderStats {
@@ -12,7 +12,15 @@ export interface HeaderStats {
   prds: number;
 }
 
-export function SiteHeader({ authed, stats }: { authed: boolean; stats?: HeaderStats }) {
+export function SiteHeader({
+  authed,
+  stats,
+  floatingDock = true,
+}: {
+  authed: boolean;
+  stats?: HeaderStats;
+  floatingDock?: boolean;
+}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
@@ -141,7 +149,13 @@ export function SiteHeader({ authed, stats }: { authed: boolean; stats?: HeaderS
         </div>
       </header>
 
-      <MenuDrawer open={menuOpen} onClose={() => setMenuOpen(false)} authed={authed} triggerRef={menuBtnRef} />
+      <GlassySidebar
+        authed={authed}
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        triggerRef={menuBtnRef}
+        floatingDock={floatingDock}
+      />
     </>
   );
 }

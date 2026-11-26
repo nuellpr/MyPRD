@@ -1,7 +1,6 @@
 import { requireUser } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
+import { sendAdminQrisConfirmEmail, sendPaymentSubmittedEmail } from "@/lib/billing-email";
 import { adminEmails } from "@/lib/env";
-import { formatIdr } from "@/lib/format";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { parseQrisOrderRef } from "@/lib/qris";
 import { getOrder, setOrderProviderRef } from "@/lib/repo";
@@ -9,7 +8,7 @@ import { sanitizeUserText } from "@/lib/safety";
 
 /**
  * POST /api/billing/qris-confirm  body: { order_id, note? }
- * Pembeli menandai sudah transfer lewat QRIS dinamis agar admin bisa memverifikasi.
+ * Pembeli menandai sudah transfer lewat QRIS agar admin bisa memverifikasi.
  */
 export async function POST(request: Request) {
   try {
@@ -34,25 +33,34 @@ export async function POST(request: Request) {
     };
     setOrderProviderRef(order.id, JSON.stringify(nextMeta));
 
-    // Notifikasi admin bersifat best-effort agar konfirmasi tetap tercatat meski SMTP/Resend terbatas.
+    const billingUrl = new URL("/billing", request.url).toString();
     const admins = adminEmails();
-    if (admins.length > 0) {
-      await Promise.allSettled(
-        admins.map((to) =>
-          sendEmail({
-            to,
-            subject: `[MyPRD] Konfirmasi QRIS ${formatIdr(order.amountIdr)} (${order.plan})`,
-            html: `<p>User <strong>${user.email}</strong> mengonfirmasi pembayaran QRIS sebesar <strong>${formatIdr(
-              order.amountIdr,
-            )}</strong> untuk paket <strong>${order.plan}</strong>.</p><p>Order ID: <code>${order.id}</code>${
-              nextMeta.note ? `<br/>Catatan: ${nextMeta.note}` : ""
-            }</p><p>Buka halaman <code>/billing</code> sebagai admin untuk menyetujui dan mengaktifkan paket.</p>`,
-          }),
-        ),
-      );
-    }
+    const results = await Promise.allSettled([
+      sendPaymentSubmittedEmail({
+        to: user.email,
+        userName: user.name,
+        orderId: order.id,
+        planId: order.plan,
+        amountIdr: order.amountIdr,
+        note: nextMeta.note,
+        billingUrl,
+      }),
+      ...admins.map((to) =>
+        sendAdminQrisConfirmEmail({
+          to,
+          buyerName: user.name,
+          buyerEmail: user.email,
+          orderId: order.id,
+          planId: order.plan,
+          amountIdr: order.amountIdr,
+          note: nextMeta.note,
+          billingUrl,
+        }),
+      ),
+    ]);
 
-    return jsonOk({ ok: true, confirmedAt, note: nextMeta.note ?? "" });
+    const buyerNotified = results[0]?.status === "fulfilled" && Boolean(results[0].value);
+    return jsonOk({ ok: true, confirmedAt, note: nextMeta.note ?? "", emailNotified: buyerNotified });
   } catch (error) {
     return errorToResponse(error);
   }
