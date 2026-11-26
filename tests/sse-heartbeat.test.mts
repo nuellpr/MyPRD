@@ -27,7 +27,7 @@ test("withHeartbeat meneruskan semua nilai sumber tanpa kehilangan satu pun", as
 
 test("withHeartbeat mengirim ping saat sumber menggantung lebih lama dari interval", async () => {
   async function* source() {
-    await delay(90);
+    await delay(160);
     yield "lambat";
   }
   const items = await collect(withHeartbeat(source(), 25));

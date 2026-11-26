@@ -58,6 +58,6 @@ test("rateLimit mengizinkan lagi setelah window lewat", async () => {
   const key = `key-window-${Math.random()}`;
   assert.equal(rateLimit(key, 1, 30).allowed, true);
   assert.equal(rateLimit(key, 1, 30).allowed, false);
-  await new Promise((r) => setTimeout(r, 45));
+  await new Promise((r) => setTimeout(r, 70));
   assert.equal(rateLimit(key, 1, 30).allowed, true);
 });

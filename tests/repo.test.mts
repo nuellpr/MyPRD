@@ -39,17 +39,19 @@ test("getProject selalu ter-scope ke pemiliknya", () => {
 
 test("listProjects mengurutkan dari yang paling baru diubah", () => {
   const before = repo.listProjects(userId);
-  const project = repo.createProject({ userId, title: "Terbaru", idea: "", modelId: "mock/myprd-demo", language: "id" });
+  repo.createProject({ userId, title: "P1", idea: "", modelId: "mock/myprd-demo", language: "id" });
+  repo.createProject({ userId, title: "P2", idea: "", modelId: "mock/myprd-demo", language: "id" });
+  const p3 = repo.createProject({ userId, title: "P3", idea: "", modelId: "mock/myprd-demo", language: "id" });
   const after = repo.listProjects(userId);
-  assert.equal(after[0].id, project.id);
-  assert.equal(after.length, before.length + 1);
+  assert.equal(after[0].id, p3.id);
+  assert.equal(after.length, before.length + 3);
 });
 
 test("updateProject menolak project milik user lain dan mengubah updated_at", async () => {
   const project = repo.createProject({ userId, title: "Awal", idea: "", modelId: "mock/myprd-demo", language: "id" });
   assert.equal(repo.updateProject("usr_lain", project.id, { title: "Bajakan" }), null);
 
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => setTimeout(r, 20));
   const updated = repo.updateProject(userId, project.id, { title: "Diubah", status: "prd_ready" });
   assert.equal(updated?.title, "Diubah");
   assert.equal(updated?.status, "prd_ready");

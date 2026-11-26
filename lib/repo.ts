@@ -79,7 +79,7 @@ export function createProject(input: {
 
 export function listProjects(userId: string): Project[] {
   const rows = getDb()
-    .prepare("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC")
+    .prepare("SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC")
     .all(userId) as unknown as ProjectRow[];
   return rows.map(toProject);
 }
@@ -124,7 +124,7 @@ export function addMessage(projectId: string, role: "user" | "assistant", conten
 
 export function listMessages(projectId: string): ChatMessageRecord[] {
   const rows = getDb()
-    .prepare("SELECT * FROM messages WHERE project_id = ? ORDER BY created_at ASC")
+    .prepare("SELECT * FROM messages WHERE project_id = ? ORDER BY created_at ASC, rowid ASC")
     .all(projectId) as unknown as MessageRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -341,7 +341,7 @@ export function getOrderById(orderId: string): Order | null {
 }
 
 export function listOrders(userId: string): Order[] {
-  const rows = getDb().prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC").all(userId) as unknown as OrderRow[];
+  const rows = getDb().prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC, rowid DESC").all(userId) as unknown as OrderRow[];
   return rows.map(toOrder);
 }
 
@@ -382,7 +382,7 @@ export function listAllOrdersForAdmin(limit = 50): AdminOrderRow[] {
       `SELECT o.*, u.email AS user_email, u.name AS user_name
        FROM orders o
        JOIN users u ON u.id = o.user_id
-       ORDER BY CASE WHEN o.status = 'pending' THEN 0 ELSE 1 END, o.created_at DESC
+       ORDER BY CASE WHEN o.status = 'pending' THEN 0 ELSE 1 END, o.created_at DESC, o.rowid DESC
        LIMIT ?`,
     )
     .all(limit) as unknown as (OrderRow & { user_email: string; user_name: string })[];

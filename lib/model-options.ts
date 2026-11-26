@@ -1,4 +1,4 @@
-import { defaultModelId, getAvailableProviders } from "./env";
+import { defaultModelId, getAvailableProviders } from "./env.ts";
 
 export interface ModelOption {
   id: string;

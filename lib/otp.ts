@@ -41,7 +41,7 @@ export function verifyOtp(email: string, purpose: OtpPurpose, code: string): str
   const db = getDb();
   const row = db
     .prepare(
-      "SELECT id, user_id, code_hash, attempts FROM otp_codes WHERE email = ? AND purpose = ? AND used_at IS NULL AND expires_at >= ? ORDER BY created_at DESC LIMIT 1",
+      "SELECT id, user_id, code_hash, attempts FROM otp_codes WHERE email = ? AND purpose = ? AND used_at IS NULL AND expires_at >= ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
     )
     .get(normalized, purpose, Date.now()) as { id: string; user_id: string; code_hash: string; attempts: number } | undefined;
   if (!row) throw new AuthError("Kode OTP tidak valid atau sudah kedaluwarsa.", 400);
