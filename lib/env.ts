@@ -5,7 +5,7 @@
  * mudah dilacak dan ada default yang aman untuk development.
  */
 
-export type ProviderId = "mock" | "gemini" | "openai" | "openrouter" | "deepseek" | "kimi" | "qwen" | "groq" | "custom";
+export type ProviderId = "mock" | "bangunweb" | "gemini" | "openai" | "openrouter" | "deepseek" | "kimi" | "qwen" | "groq" | "custom";
 
 export interface ProviderConfig {
   id: ProviderId;
@@ -43,6 +43,18 @@ export function getProviders(): ProviderConfig[] {
       models: ["myprd-demo"],
       costPerMTokIn: 0,
       costPerMTokOut: 0,
+    },
+    {
+      id: "bangunweb",
+      label: "BangunWeb AI Router",
+      baseUrl: (process.env.BANGUNWEB_BASE_URL ?? "https://router.bangunweb.com/v1").replace(/\/+$/, ""),
+      apiKey: readKey("BANGUNWEB_API_KEY", "BWR_API_KEY"),
+      models: (process.env.BANGUNWEB_MODELS ?? "bw-swift,deepseek-v4.1-flash,gpt-5.4-mini,gpt-6.2-astra,gpt-6.2-sol")
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean),
+      costPerMTokIn: 0.2,
+      costPerMTokOut: 0.8,
     },
     {
       id: "gemini",
@@ -159,6 +171,17 @@ export function defaultModelId(): string {
   const firstNonMock = getAvailableProviders().find((p) => p.id !== "mock");
   if (firstNonMock) return `${firstNonMock.id}/${firstNonMock.models[0]}`;
   return "mock/myprd-demo";
+}
+
+/** Pilih model yang provider-nya aktif: requested -> projectModel -> defaultModelId(). */
+export function resolveActiveModelId(requested?: string | null, projectModel?: string | null): string {
+  for (const candidate of [requested, projectModel]) {
+    const clean = typeof candidate === "string" ? candidate.trim() : "";
+    if (!clean) continue;
+    const parsed = parseModelId(clean);
+    if (parsed && findProvider(parsed.providerId)) return clean;
+  }
+  return defaultModelId();
 }
 
 export function appSecret(): string {

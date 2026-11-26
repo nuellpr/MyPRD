@@ -7,6 +7,10 @@ delete process.env.DEEPSEEK_API_KEY;
 delete process.env.GEMINI_API_KEY;
 delete process.env.GOOGLE_API_KEY;
 delete process.env.GEMINI;
+delete process.env.BANGUNWEB_API_KEY;
+delete process.env.BWR_API_KEY;
+delete process.env.BANGUNWEB_BASE_URL;
+delete process.env.BANGUNWEB_MODELS;
 delete process.env.AI_DEFAULT_MODEL;
 
 const { getAvailableProviders, parseModelId, findProvider, defaultModelId } = await import("../lib/env.ts");
@@ -111,6 +115,35 @@ test("defaultModelId memakai gemini kalau hanya gemini yang punya key", () => {
     assert.equal(defaultModelId(), "gemini/gemini-3.8-flash");
   } finally {
     delete process.env.GEMINI_API_KEY;
+  }
+});
+
+test("provider bangunweb muncul saat BANGUNWEB_API_KEY diisi dan defaultModelId memakainya", () => {
+  process.env.BANGUNWEB_API_KEY = "bwr_live_dummy";
+  try {
+    const bw = getAvailableProviders().find((p) => p.id === "bangunweb");
+    assert.ok(bw, "provider bangunweb harus tersedia");
+    assert.equal(bw?.label, "BangunWeb AI Router");
+    assert.equal(bw?.baseUrl, "https://router.bangunweb.com/v1");
+    assert.ok(bw?.models.includes("bw-swift"));
+    assert.ok(bw?.models.includes("gpt-6.2-astra"));
+    assert.ok(bw?.models.includes("gpt-6.2-sol"));
+    assert.equal(defaultModelId(), "bangunweb/bw-swift");
+  } finally {
+    delete process.env.BANGUNWEB_API_KEY;
+  }
+});
+
+test("provider bangunweb mendukung alias BWR_API_KEY dan BANGUNWEB_BASE_URL tanpa trailing slash", () => {
+  process.env.BWR_API_KEY = "bwr_live_alias";
+  process.env.BANGUNWEB_BASE_URL = "https://router.bangunweb.com/v1///";
+  try {
+    const bw = findProvider("bangunweb");
+    assert.ok(bw);
+    assert.equal(bw?.baseUrl, "https://router.bangunweb.com/v1");
+  } finally {
+    delete process.env.BWR_API_KEY;
+    delete process.env.BANGUNWEB_BASE_URL;
   }
 });
 

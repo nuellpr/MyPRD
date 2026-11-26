@@ -90,6 +90,9 @@ interface GlobalWithDb {
 
 const SCHEMA = `
 PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 5000;
+PRAGMA temp_store = MEMORY;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -163,6 +166,7 @@ CREATE TABLE IF NOT EXISTS orders (
   updated_at   INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS sessions (
   id         TEXT PRIMARY KEY,

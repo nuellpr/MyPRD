@@ -44,7 +44,9 @@ next-env.d.ts
 # local database & dev secret
 /data/
 
-# local dev/smoke logs
+# local dev/smoke logs & verification artifacts
 *.log
+.playwright-mcp/
+verify/
 
 

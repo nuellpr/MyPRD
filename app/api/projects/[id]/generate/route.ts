@@ -1,11 +1,12 @@
 import { requireUser } from "@/lib/auth";
 import { StreamStalledError, streamChat } from "@/lib/ai";
-import { findProvider, parseModelId } from "@/lib/env";
+import { findProvider, parseModelId, resolveActiveModelId } from "@/lib/env";
 import { errorToResponse, SSE_HEADERS, sseEvent, toReadableStream } from "@/lib/http";
 import { AI_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
 import { buildMessages, cleanPrdMarkdown, deriveTitleFromPrd, looksLikePrd, type Language } from "@/lib/prd";
 import { estimateCostUsd } from "@/lib/plans";
 import { addMessage, finalizeUsage, getProject, getQuotaState, listMessages, releaseUsage, reserveUsage, savePrd, touchProject, updateProject } from "@/lib/repo";
+import { MAX_USER_MESSAGE_CHARS, sanitizeUserText } from "@/lib/safety";
 import { withHeartbeat } from "@/lib/sse-heartbeat";
 import type { ChatMessage } from "@/lib/ai";
 
@@ -18,7 +19,7 @@ type Context = { params: Promise<{ id: string }> };
  * PRD yang dihasilkan langsung disimpan supaya user tidak kehilangan hasil
  * kalau koneksi terputus di tengah streaming.
  */
-export async function POST(_request: Request, { params }: Context) {
+export async function POST(request: Request, { params }: Context) {
   try {
     const user = await requireUser();
     const { id } = await params;
@@ -44,6 +45,17 @@ export async function POST(_request: Request, { params }: Context) {
       );
     }
 
+    const bodyJson = (await request.json().catch(() => ({}))) as { wizardContext?: unknown; modelId?: unknown };
+    const requestedModel = typeof bodyJson.modelId === "string" ? bodyJson.modelId : undefined;
+    const activeModelId = resolveActiveModelId(requestedModel, project.modelId);
+    if (activeModelId !== project.modelId) {
+      updateProject(user.id, project.id, { modelId: activeModelId });
+    }
+    const wizardContext = sanitizeUserText(bodyJson.wizardContext, MAX_USER_MESSAGE_CHARS);
+    if (wizardContext) {
+      addMessage(project.id, "user", wizardContext);
+    }
+
     const history = listMessages(project.id).map((m) => ({ role: m.role, content: m.content }) as ChatMessage);
     const messages: ChatMessage[] = buildMessages({
       language: project.language as Language,
@@ -52,7 +64,7 @@ export async function POST(_request: Request, { params }: Context) {
       mode: "generate",
     });
 
-    const { stream, usage } = streamChat({ modelId: project.modelId, messages, maxOutputTokens: 6000, temperature: 0.4 });
+    const { stream, usage } = streamChat({ modelId: activeModelId, messages, maxOutputTokens: 6000, temperature: 0.4 });
 
     // Reservasi kuota sebelum streaming: satu tick sinkron dengan cek kuota di
     // atas, jadi dua permintaan paralel tidak bisa sama-sama lolos.
@@ -60,7 +72,7 @@ export async function POST(_request: Request, { params }: Context) {
     let usageFinalized = false;
 
     const body = (async function* () {
-      yield sseEvent({ type: "start", modelId: project.modelId, quota: getQuotaState(user.id, user.plan) });
+      yield sseEvent({ type: "start", modelId: activeModelId, quota: getQuotaState(user.id, user.plan) });
       let output = "";
       let stalled = false;
       try {
@@ -99,7 +111,7 @@ export async function POST(_request: Request, { params }: Context) {
       touchProject(project.id);
 
       const u = await usage;
-      const parsed = parseModelId(project.modelId);
+      const parsed = parseModelId(activeModelId);
       const provider = parsed ? findProvider(parsed.providerId) : undefined;
       finalizeUsage(usageId, {
         provider: u.provider,

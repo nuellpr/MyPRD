@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 // Tipe minimal Web Speech API (tidak ada di lib.dom TS).
 interface SpeechResultLike {
@@ -30,10 +30,15 @@ function getSpeechRecognition(): SpeechRecognitionCtor | null {
 }
 
 export function DictationButton({ onText }: { onText: (text: string) => void }) {
-  const [supported] = useState(() => getSpeechRecognition() !== null);
+  const supported = useSyncExternalStore(
+    () => () => {},
+    () => getSpeechRecognition() !== null,
+    () => false,
+  );
   const [listening, setListening] = useState(false);
   const recognizerRef = useRef<SpeechRecognitionLike | null>(null);
   const onTextRef = useRef(onText);
+
   useEffect(() => {
     onTextRef.current = onText;
   });
@@ -88,16 +93,37 @@ export function DictationButton({ onText }: { onText: (text: string) => void }) 
     <button
       type="button"
       onClick={toggle}
-      title={listening ? "Berhenti mendengarkan" : "Isi ide dengan suara (Bahasa Indonesia)"}
+      title={listening ? "Berhenti mendengarkan" : "Bicara — isi ide dengan suara (Bahasa Indonesia)"}
+      aria-label={listening ? "Berhenti mendengarkan" : "Bicara"}
       aria-pressed={listening}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
+      className={`relative grid h-9 w-9 place-items-center rounded-full border transition ${
         listening
-          ? "animate-pulse border-red-500/60 bg-red-500/15 text-red-300"
-          : "border-slate-700 text-slate-300 hover:border-slate-500"
+          ? "border-rose-500/70 bg-rose-500/20 text-rose-300"
+          : "border-slate-700/80 bg-slate-900/60 text-slate-300 hover:border-[#35d6ff]/60 hover:text-white"
       }`}
     >
-      <span aria-hidden>{listening ? "⏹" : "🎙"}</span>
-      {listening ? "Mendengarkan... (klik untuk berhenti)" : "Dictation"}
+      {listening ? (
+        <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-rose-500/30" />
+      ) : null}
+      {listening ? (
+        <svg viewBox="0 0 24 24" className="relative h-4 w-4" fill="currentColor" aria-hidden="true">
+          <rect x="7" y="7" width="10" height="10" rx="2" />
+        </svg>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          className="relative h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="9" y="3" width="6" height="11" rx="3" />
+          <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" />
+        </svg>
+      )}
     </button>
   );
 }

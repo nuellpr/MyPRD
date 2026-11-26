@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Field } from "@/components/auth/Field";
+import { SubmitButton, type SubmitStatus } from "@/components/auth/SubmitButton";
+import { IconCheck, IconLock, IconMail } from "./icons";
 import { OtpInput } from "./OtpInput";
-import { IconArrowRight, IconCheck, IconLock, IconMail, IconSparkles } from "./icons";
-
-const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-sky-500";
 
 interface Props {
   mode: "forgot" | "reset";
@@ -17,11 +17,12 @@ interface Props {
 
 export function PasswordRecoveryForm({ mode, email: initialEmail = "", devCode: initialCode = "" }: Props) {
   const router = useRouter();
+  const reduced = useReducedMotion();
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState(initialCode);
   const [password, setPassword] = useState("");
   const [otpStatus, setOtpStatus] = useState<"idle" | "error" | "success">("idle");
-  const [loading, setLoading] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [devCode, setDevCode] = useState("");
@@ -29,7 +30,7 @@ export function PasswordRecoveryForm({ mode, email: initialEmail = "", devCode: 
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
+    setSubmitStatus("loading");
     setError("");
     setDevCode("");
     setOtpStatus("idle");
@@ -44,6 +45,7 @@ export function PasswordRecoveryForm({ mode, email: initialEmail = "", devCode: 
         if (!isForgot) setOtpStatus("error");
         throw new Error(data.error || "Gagal. Coba lagi sebentar.");
       }
+      setSubmitStatus("success");
       if (isForgot) {
         setDone(true);
         if (data.devCode) setDevCode(data.devCode);
@@ -53,110 +55,134 @@ export function PasswordRecoveryForm({ mode, email: initialEmail = "", devCode: 
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal. Coba lagi sebentar.");
-    } finally {
-      setLoading(false);
+      setSubmitStatus("idle");
     }
   }
 
   return (
-    <div className="auth-shell flex flex-1 flex-col justify-center px-4 py-16">
-      <main className="mx-auto w-full max-w-md">
-        <div className="auth-card rounded-2xl border border-slate-800 bg-slate-900/40 p-8 backdrop-blur">
-          <div className="mb-5 flex items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-300">
-              <IconSparkles className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-semibold tracking-wide text-slate-200">MyPRD</span>
-          </div>
-          <h1 className="auth-field text-2xl font-semibold">
-            {isForgot ? "Lupa password?" : "Password baru"}
-          </h1>
-          <p className="auth-field mt-1 mb-6 text-sm text-slate-400">
-            {isForgot
-              ? "Masukkan email akunmu. Kami kirim kode 6 digit yang berlaku 10 menit."
-              : "Masukkan kode OTP dari email dan password baru minimal 8 karakter."}
-          </p>
+    <div>
+      {/* Step indicator */}
+      <div className="mb-5 flex items-center gap-2 text-xs">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${
+            isForgot && !done
+              ? "border border-[#35d6ff]/50 bg-[#35d6ff]/15 text-[#7fe3ff]"
+              : "border border-emerald-400/40 bg-emerald-500/15 text-emerald-300"
+          }`}
+        >
+          <span>1.</span> Email
+        </span>
+        <span className="h-px flex-1 bg-slate-800">
+          <motion.span
+            initial={false}
+            animate={{ scaleX: isForgot && !done ? 0.35 : 1 }}
+            transition={{ duration: reduced ? 0.01 : 0.35 }}
+            className="block h-full origin-left bg-linear-to-r from-[#4f7cff] to-[#35d6ff]"
+          />
+        </span>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${
+            !isForgot
+              ? "border border-[#35d6ff]/50 bg-[#35d6ff]/15 text-[#7fe3ff]"
+              : "border border-slate-800 bg-slate-900/60 text-slate-400"
+          }`}
+        >
+          <span>2.</span> Kode & password baru
+        </span>
+      </div>
 
-          {done ? (
-            <div className="space-y-4">
-              <p className="inline-flex items-center gap-2 text-sm text-emerald-300">
-                <IconCheck className="h-4 w-4" /> Jika email terdaftar, kode OTP sudah dikirim.
-              </p>
-              {devCode ? (
-                <p className="break-all rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  Mode dev — kode: <span className="font-mono">{devCode}</span>.{" "}
-                  <Link
-                    className="underline"
-                    href={`/reset-password?email=${encodeURIComponent(email)}&devCode=${encodeURIComponent(devCode)}`}
-                  >
-                    Lanjut ganti password
-                  </Link>
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="auth-field relative">
-                <IconMail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Email"
-                  autoComplete="email"
-                  readOnly={!isForgot}
-                  required
-                  className={inputClass}
-                />
-              </div>
-              {!isForgot ? (
-                <div className="auth-field">
-                  <OtpInput value={code} onChange={setCode} status={otpStatus} />
-                </div>
-              ) : null}
-              {!isForgot ? (
-                <div className="auth-field relative">
-                  <IconLock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="Password baru"
-                    autoComplete="new-password"
-                    minLength={8}
-                    required
-                    className={inputClass}
-                  />
-                </div>
-              ) : null}
-              {!isForgot && initialCode ? (
-                <p className="auth-field text-center text-xs text-slate-500">
-                  Mode dev — kode: <span className="font-mono text-sky-300">{initialCode}</span>
-                </p>
-              ) : null}
-              {error ? (
-                <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                  {error}
-                </p>
-              ) : null}
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-shine auth-field flex w-full items-center justify-center gap-1.5 rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
+      <h1 className="text-2xl font-semibold text-white">{isForgot ? "Lupa password?" : "Password baru"}</h1>
+      <p className="mt-1 mb-6 text-sm text-slate-400">
+        {isForgot
+          ? "Masukkan email akunmu. Kami kirim kode 6 digit yang berlaku 10 menit."
+          : "Masukkan kode OTP dari email dan password baru minimal 8 karakter."}
+      </p>
+
+      {done ? (
+        <div className="space-y-4">
+          <p className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-300">
+            <IconCheck className="h-4 w-4 shrink-0" /> Jika email terdaftar, kode OTP sudah dikirim.
+          </p>
+          {devCode ? (
+            <p className="break-all rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              Mode dev — kode: <span className="font-mono">{devCode}</span>.{" "}
+              <Link
+                className="font-medium underline"
+                href={`/reset-password?email=${encodeURIComponent(email)}&devCode=${encodeURIComponent(devCode)}`}
               >
-                {loading ? "Memproses..." : isForgot ? "Kirim kode OTP" : "Simpan password baru"}
-                {!loading ? <IconArrowRight className="h-4 w-4" /> : null}
-              </button>
-            </form>
-          )}
-
-          <p className="auth-field mt-6 text-center text-sm text-slate-400">
-            <Link href="/login" className="text-sky-400 hover:underline">
-              Kembali ke masuk
-            </Link>
-          </p>
+                Lanjut ganti password →
+              </Link>
+            </p>
+          ) : null}
         </div>
-      </main>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Field
+            id="recovery-email"
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            autoComplete="email"
+            readOnly={!isForgot}
+            required
+            icon={<IconMail className="h-4 w-4" />}
+          />
+
+          {!isForgot ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-400">Kode OTP 6 digit</p>
+              <OtpInput value={code} onChange={setCode} status={otpStatus} />
+            </div>
+          ) : null}
+
+          {!isForgot ? (
+            <Field
+              id="recovery-password"
+              label="Password baru"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              autoComplete="new-password"
+              minLength={8}
+              required
+              icon={<IconLock className="h-4 w-4" />}
+            />
+          ) : null}
+
+          {!isForgot && initialCode ? (
+            <p className="text-center text-xs text-slate-500">
+              Mode dev — kode: <span className="font-mono text-[#35d6ff]">{initialCode}</span>
+            </p>
+          ) : null}
+
+          <AnimatePresence>
+            {error ? (
+              <motion.p
+                role="alert"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+              >
+                {error}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
+
+          <SubmitButton
+            status={submitStatus}
+            idleLabel={isForgot ? "Kirim kode OTP" : "Simpan password baru"}
+            successLabel={isForgot ? "Terkirim" : "Password tersimpan"}
+          />
+        </form>
+      )}
+
+      <p className="mt-6 text-center text-sm text-slate-400">
+        <Link href="/login" className="text-[#35d6ff] hover:underline">
+          Kembali ke masuk
+        </Link>
+      </p>
     </div>
   );
 }

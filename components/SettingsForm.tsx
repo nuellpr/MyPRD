@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import type { ModelOption } from "./NewProjectForm";
+import { useState } from "react";
+import { SubmitButton } from "@/components/auth/SubmitButton";
+import { Reveal } from "@/components/motion/Reveal";
+import type { ModelOption } from "@/lib/model-options";
 import { IconBot, IconCheck, IconLock, IconMail, IconUser } from "./icons";
 
 interface SettingsFormProps {
@@ -16,7 +19,7 @@ interface SettingsFormProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm outline-none transition focus:border-sky-500";
+  "w-full rounded-xl border border-slate-700/80 bg-[#060912] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-[#35d6ff] focus:shadow-[0_0_0_3px_rgba(53,214,255,0.14)]";
 
 export function SettingsForm({
   initialName,
@@ -90,203 +93,219 @@ export function SettingsForm({
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-6">
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-          <div className="mb-5 flex items-center gap-2">
-            <IconUser className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold text-white">Profil</h2>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="settings-name" className="mb-1.5 block text-xs font-medium text-slate-400">
-                Nama
-              </label>
-              <input
-                id="settings-name"
-                value={name}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  setSaved(false);
-                }}
-                maxLength={80}
-                required
-                className={inputClass}
-              />
+        <Reveal>
+          <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
+            <div className="mb-5 flex items-center gap-2">
+              <IconUser className="h-4 w-4 text-[#35d6ff]" />
+              <h2 className="text-sm font-semibold text-white">Profil</h2>
             </div>
-            <div>
-              <label htmlFor="settings-email" className="mb-1.5 block text-xs font-medium text-slate-400">
-                Email
-              </label>
-              <div className="relative">
-                <IconMail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="settings-name" className="mb-1.5 block text-xs font-medium text-slate-400">
+                  Nama
+                </label>
                 <input
-                  id="settings-email"
-                  value={email}
-                  readOnly
-                  disabled
-                  className="w-full cursor-not-allowed rounded-lg border border-slate-800 bg-slate-950/60 py-2.5 pl-10 pr-3 text-sm text-slate-400"
+                  id="settings-name"
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setSaved(false);
+                  }}
+                  maxLength={80}
+                  required
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="settings-email" className="mb-1.5 block text-xs font-medium text-slate-400">
+                  Email
+                </label>
+                <div className="relative">
+                  <IconMail className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <input
+                    id="settings-email"
+                    value={email}
+                    readOnly
+                    disabled
+                    className="w-full cursor-not-allowed rounded-xl border border-slate-800 bg-slate-950/60 py-2.5 pr-3 pl-10 text-sm text-slate-400"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="settings-phone" className="mb-1.5 block text-xs font-medium text-slate-400">
+                  No. telepon
+                </label>
+                <input
+                  id="settings-phone"
+                  value={phone}
+                  onChange={(event) => {
+                    setPhone(event.target.value);
+                    setSaved(false);
+                  }}
+                  maxLength={40}
+                  placeholder="Contoh: 08123456789"
+                  className={inputClass}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="settings-bio" className="mb-1.5 block text-xs font-medium text-slate-400">
+                  Bio
+                </label>
+                <textarea
+                  id="settings-bio"
+                  value={bio}
+                  onChange={(event) => {
+                    setBio(event.target.value);
+                    setSaved(false);
+                  }}
+                  maxLength={300}
+                  rows={3}
+                  placeholder="Ceritakan sedikit tentang dirimu..."
+                  className={inputClass}
                 />
               </div>
             </div>
-            <div>
-              <label htmlFor="settings-phone" className="mb-1.5 block text-xs font-medium text-slate-400">
-                No. telepon
-              </label>
-              <input
-                id="settings-phone"
-                value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value);
-                  setSaved(false);
-                }}
-                maxLength={40}
-                placeholder="Contoh: 08123456789"
-                className={inputClass}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="settings-bio" className="mb-1.5 block text-xs font-medium text-slate-400">
-                Bio
-              </label>
-              <textarea
-                id="settings-bio"
-                value={bio}
-                onChange={(event) => {
-                  setBio(event.target.value);
-                  setSaved(false);
-                }}
-                maxLength={300}
-                rows={3}
-                placeholder="Ceritakan sedikit tentang dirimu..."
-                className={inputClass}
-              />
-            </div>
-          </div>
-        </section>
+          </section>
+        </Reveal>
 
-        <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-          <div className="mb-1 flex items-center gap-2">
-            <IconBot className="h-4 w-4 text-sky-300" />
-            <h2 className="text-sm font-semibold text-white">Model AI default</h2>
-          </div>
-          <p className="mb-4 text-xs leading-relaxed text-slate-400">
-            Dipakai untuk project baru. Kamu tetap bisa ganti model per project di workspace.
-          </p>
-          <label htmlFor="settings-model" className="sr-only">
-            Model AI default
-          </label>
-          <select
-            id="settings-model"
-            value={modelId}
-            onChange={(event) => {
-              setModelId(event.target.value);
-              setSaved(false);
-            }}
-            className={inputClass}
-          >
-            {providers.map((provider) => (
-              <optgroup key={provider.id} label={provider.label}>
-                {provider.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.model}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          {providers.length === 1 && providers[0].id === "mock" ? (
-            <p className="mt-2 text-xs text-amber-300/80">
-              Belum ada API key provider. Tambahkan di <code className="text-amber-200">.env</code> untuk memakai model lain.
+        <Reveal delay={0.05}>
+          <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
+            <div className="mb-1 flex items-center gap-2">
+              <IconBot className="h-4 w-4 text-[#35d6ff]" />
+              <h2 className="text-sm font-semibold text-white">Model AI default</h2>
+            </div>
+            <p className="mb-4 text-xs leading-relaxed text-slate-400">
+              Dipakai untuk project baru. Kamu tetap bisa ganti model per project di workspace.
             </p>
+            <label htmlFor="settings-model" className="sr-only">
+              Model AI default
+            </label>
+            <select
+              id="settings-model"
+              value={modelId}
+              onChange={(event) => {
+                setModelId(event.target.value);
+                setSaved(false);
+              }}
+              className={inputClass}
+            >
+              {providers.map((provider) => (
+                <optgroup key={provider.id} label={provider.label}>
+                  {provider.models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.model}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {providers.length === 1 && providers[0].id === "mock" ? (
+              <p className="mt-2 text-xs text-amber-300/80">
+                Belum ada API key provider. Tambahkan di <code className="text-amber-200">.env</code> untuk memakai model lain.
+              </p>
+            ) : null}
+          </section>
+        </Reveal>
+
+        <AnimatePresence>
+          {error ? (
+            <motion.p
+              role="alert"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200"
+            >
+              {error}
+            </motion.p>
           ) : null}
-        </section>
+        </AnimatePresence>
 
-        {error ? (
-          <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-shine rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
-          >
-            {saving ? "Menyimpan..." : "Simpan perubahan"}
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="w-full sm:w-auto sm:min-w-48">
+            <SubmitButton
+              status={saving ? "loading" : saved ? "success" : "idle"}
+              idleLabel="Simpan perubahan"
+              loadingLabel="Menyimpan..."
+              successLabel="Tersimpan"
+            />
+          </div>
           {saved ? (
             <span className="inline-flex items-center gap-1.5 text-sm text-emerald-300">
-              <IconCheck className="h-4 w-4" /> Tersimpan
+              <IconCheck className="h-4 w-4" /> Perubahan tersimpan
             </span>
           ) : null}
         </div>
       </form>
 
-      <form onSubmit={handlePassword} className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6">
-        <div className="mb-1 flex items-center gap-2">
-          <IconLock className="h-4 w-4 text-sky-300" />
-          <h2 className="text-sm font-semibold text-white">Ganti password</h2>
-        </div>
-        {hasPassword ? (
-          <>
-            <p className="mb-4 text-xs leading-relaxed text-slate-400">
-              Masukkan password lama, lalu password baru minimal 8 karakter.
+      <Reveal delay={0.1}>
+        <form onSubmit={handlePassword} className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
+          <div className="mb-1 flex items-center gap-2">
+            <IconLock className="h-4 w-4 text-[#35d6ff]" />
+            <h2 className="text-sm font-semibold text-white">Ganti password</h2>
+          </div>
+          {hasPassword ? (
+            <>
+              <p className="mb-4 text-xs leading-relaxed text-slate-400">
+                Masukkan password lama, lalu password baru minimal 8 karakter.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="current-password" className="mb-1.5 block text-xs font-medium text-slate-400">
+                    Password lama
+                  </label>
+                  <input
+                    id="current-password"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="new-password" className="mb-1.5 block text-xs font-medium text-slate-400">
+                    Password baru
+                  </label>
+                  <input
+                    id="new-password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+              {pwError ? (
+                <p role="alert" className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {pwError}
+                </p>
+              ) : null}
+              {pwMessage ? (
+                <p className="mt-4 inline-flex items-center gap-1.5 text-sm text-emerald-300">
+                  <IconCheck className="h-4 w-4" /> {pwMessage}
+                </p>
+              ) : null}
+              <div className="mt-4 sm:w-48">
+                <SubmitButton
+                  status={pwSaving ? "loading" : pwMessage ? "success" : "idle"}
+                  idleLabel="Ganti password"
+                  loadingLabel="Mengganti..."
+                  successLabel="Diganti"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm leading-relaxed text-slate-400">
+              Akun ini terdaftar lewat Google. Password tidak tersedia — gunakan tombol Masuk dengan Google.
             </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="current-password" className="mb-1.5 block text-xs font-medium text-slate-400">
-                  Password lama
-                </label>
-                <input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  autoComplete="current-password"
-                  required
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="new-password" className="mb-1.5 block text-xs font-medium text-slate-400">
-                  Password baru
-                </label>
-                <input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            {pwError ? (
-              <p role="alert" className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                {pwError}
-              </p>
-            ) : null}
-            {pwMessage ? (
-              <p className="mt-4 inline-flex items-center gap-1.5 text-sm text-emerald-300">
-                <IconCheck className="h-4 w-4" /> {pwMessage}
-              </p>
-            ) : null}
-            <button
-              type="submit"
-              disabled={pwSaving}
-              className="btn-shine mt-4 rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-60"
-            >
-              {pwSaving ? "Mengganti..." : "Ganti password"}
-            </button>
-          </>
-        ) : (
-          <p className="text-sm leading-relaxed text-slate-400">
-            Akun ini terdaftar lewat Google. Password tidak tersedia — gunakan tombol Masuk dengan Google.
-          </p>
-        )}
-      </form>
+          )}
+        </form>
+      </Reveal>
     </div>
   );
 }

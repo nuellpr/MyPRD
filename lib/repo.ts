@@ -350,6 +350,50 @@ export function setOrderProviderRef(orderId: string, ref: string): void {
 }
 
 /**
+ * Pilih nominal unik 3 digit (`base + 101..899`) untuk order QRIS yang sedang
+ * pending dalam 24 jam terakhir supaya tiap transfer mudah dibedakan.
+ */
+export function pickUniqueQrisAmount(baseAmountIdr: number): number {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const rows = getDb()
+    .prepare("SELECT amount_idr FROM orders WHERE provider = 'qris' AND status = 'pending' AND created_at > ?")
+    .all(cutoff) as { amount_idr: number }[];
+  const taken = new Set(rows.map((r) => Number(r.amount_idr)));
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const code = 101 + Math.floor(Math.random() * 799);
+    const candidate = baseAmountIdr + code;
+    if (!taken.has(candidate)) return candidate;
+  }
+  for (let code = 101; code <= 899; code += 1) {
+    const candidate = baseAmountIdr + code;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return baseAmountIdr + 101;
+}
+
+export interface AdminOrderRow extends Order {
+  userEmail: string;
+  userName: string;
+}
+
+export function listAllOrdersForAdmin(limit = 50): AdminOrderRow[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT o.*, u.email AS user_email, u.name AS user_name
+       FROM orders o
+       JOIN users u ON u.id = o.user_id
+       ORDER BY CASE WHEN o.status = 'pending' THEN 0 ELSE 1 END, o.created_at DESC
+       LIMIT ?`,
+    )
+    .all(limit) as unknown as (OrderRow & { user_email: string; user_name: string })[];
+  return rows.map((row) => ({
+    ...toOrder(row),
+    userEmail: row.user_email,
+    userName: row.user_name,
+  }));
+}
+
+/**
  * Tandai order lunas + upgrade paket user (hanya untuk order langganan
  * starter/pro — produk sekali bayar tidak mengubah paket). Idempoten: kalau
  * order sudah `paid`, tidak ada perubahan dan
@@ -448,6 +492,22 @@ export function getActiveSession(sessionId: string): Session | null {
 /** Cabut satu sesi (logout di perangkat ini; sesi perangkat lain tetap hidup). */
 export function revokeSession(sessionId: string): void {
   getDb().prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+}
+
+export interface SiteStats {
+  users: number;
+  prds: number;
+}
+
+/** Hitung total user dan PRD untuk ditampilkan sebagai stat chip di header. */
+export function getSiteStats(): SiteStats {
+  const row = getDb()
+    .prepare("SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM prds) AS prds")
+    .get() as { users?: number; prds?: number } | undefined;
+  return {
+    users: Number(row?.users ?? 0),
+    prds: Number(row?.prds ?? 0),
+  };
 }
 
 

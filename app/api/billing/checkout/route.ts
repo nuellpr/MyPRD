@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import {
+  BillingError,
   billingProvider,
   checkoutPlan,
   createMayarPaymentRequest,
@@ -7,11 +8,19 @@ import {
   midtransClientKey,
 } from "@/lib/billing";
 import { errorToResponse, jsonOk, readJson } from "@/lib/http";
-import { createOrder, setOrderProviderRef, setOrderStatus } from "@/lib/repo";
+import {
+  createDynamicQris,
+  extractQrisMerchant,
+  qrisStaticPayload,
+  renderQrisDataUrl,
+  renderQrisSvg,
+} from "@/lib/qris";
+import { createOrder, pickUniqueQrisAmount, setOrderProviderRef, setOrderStatus } from "@/lib/repo";
 
 /**
  * Buat order langganan + siapkan pembayaran.
  * Body: { plan: "starter" | "pro" }.
+ * - Provider qris → QRIS dinamis dari payload statis + kode unik 3 digit.
  * - Provider mock → order `pending`, UI menampilkan tombol simulasi bayar.
  * - Provider midtrans → order `pending` + Snap token untuk snap.js.
  * - Provider mayar → order `pending` + link pembayaran Mayar (redirect langsung).
@@ -22,6 +31,40 @@ export async function POST(request: Request) {
     const body = await readJson<{ plan?: string }>(request);
     const plan = checkoutPlan(String(body.plan ?? ""));
     const provider = billingProvider();
+
+    if (provider === "qris") {
+      const staticPayload = qrisStaticPayload();
+      if (!staticPayload) {
+        throw new BillingError("QRIS_STATIC_PAYLOAD belum diisi — cek konfigurasi .env.", 503);
+      }
+      const uniqueAmount = pickUniqueQrisAmount(plan.priceIdr);
+      const dynamicPayload = createDynamicQris(staticPayload, uniqueAmount);
+      const [svg, qrDataUrl] = await Promise.all([
+        renderQrisSvg(dynamicPayload),
+        renderQrisDataUrl(dynamicPayload),
+      ]);
+      const providerRef = JSON.stringify({ payload: dynamicPayload });
+      const order = createOrder({
+        userId: user.id,
+        plan: plan.id,
+        amountIdr: uniqueAmount,
+        provider: "qris",
+      });
+      setOrderProviderRef(order.id, providerRef);
+      return jsonOk({
+        order: { ...order, providerRef },
+        provider,
+        qris: {
+          payload: dynamicPayload,
+          svg,
+          qrDataUrl,
+          merchant: extractQrisMerchant(dynamicPayload),
+          baseAmountIdr: plan.priceIdr,
+          uniqueCode: uniqueAmount - plan.priceIdr,
+        },
+      });
+    }
+
     const order = createOrder({ userId: user.id, plan: plan.id, amountIdr: plan.priceIdr, provider });
     if (provider === "mayar") {
       let payment;
@@ -38,9 +81,6 @@ export async function POST(request: Request) {
         setOrderStatus(order.id, "failed");
         throw error;
       }
-      // Yang disimpan adalah id payment request Mayar, bukan link-nya: id yang
-      // bisa di-requery untuk memastikan status (tombol "cek status" di /billing
-      // dan verifikasi webhook). Link diambil lagi dari API saat dibutuhkan.
       setOrderProviderRef(order.id, payment.id);
       return jsonOk({ order: { ...order, providerRef: payment.id }, provider, redirectUrl: payment.link });
     }
@@ -55,8 +95,6 @@ export async function POST(request: Request) {
           customerName: user.name,
         });
       } catch (error) {
-        // Tanpa Snap token order ini tidak bisa dibayar — tandai gagal supaya
-        // tidak menggantung sebagai "pending" selamanya di riwayat.
         setOrderStatus(order.id, "failed");
         throw error;
       }

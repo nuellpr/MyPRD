@@ -1,12 +1,6 @@
 /**
- * Peta visual PRD: mengubah daftar task datar menjadi alur fase yang mudah dibaca.
- *
- * Fase dihitung dari dependensi antar task (level topologis):
- *   - task tanpa dependensi → Fase 1
- *   - task yang menunggu Fase 1 → Fase 2, dan seterusnya
- *
- * Tidak ada panggilan AI tambahan: semuanya diturunkan dari PRD yang sudah ada,
- * jadi peta selalu sinkron dengan hasil generate terakhir.
+ * Peta visual PRD: mengubah daftar task datar menjadi alur fase dan pohon fitur
+ * (Project → Fitur → Sub-fitur → Tasks) yang mudah dibaca.
  */
 import { orderTasks, taskStats, type ParsedTask, type TaskStats } from "./tasks.ts";
 
@@ -31,6 +25,17 @@ export interface Roadmap {
   dependents: Record<string, number>;
   /** Task yang perlu didahulukan: di jalur kritis atau membuka ≥2 task lain. */
   keyTasks: string[];
+}
+
+export interface FeatureNode {
+  id: string;
+  title: string;
+  description: string;
+  phaseLabel: string;
+  subFeatures: string[];
+  tasks: ParsedTask[];
+  doneCount: number;
+  totalCount: number;
 }
 
 const MIDDLE_HINTS = ["Fitur inti", "Integrasi & alur lanjutan", "Penyempurnaan", "Poles & tambahan"];
@@ -166,4 +171,103 @@ export function extractFeatureList(markdown: string, max = 12): string[] {
     if (features.length >= max) break;
   }
   return features;
+}
+
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Bangun pohon fitur (Project -> Fitur -> Sub-fitur -> Tasks) untuk mindmap Roadmap. */
+export function buildFeatureTree(markdown: string, tasks: ParsedTask[]): FeatureNode[] {
+  const lines = markdown.split(/\r?\n/);
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{1,4}\s*.*fitur utama/i.test(lines[i])) {
+      start = i + 1;
+      break;
+    }
+  }
+
+  const parsedFeatures: { title: string; description: string; subFeatures: string[] }[] = [];
+  if (start !== -1) {
+    for (let i = start; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^#{1,2}\s+/.test(line)) break;
+      if (/^###\s+/.test(line)) break;
+      const match = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.+)$/);
+      if (!match) continue;
+      const raw = match[1].replace(/\*\*/g, "").replace(/`/g, "").trim();
+      const [mainPart, ...metaParts] = raw.split("|").map((p) => p.trim());
+      let subFeatures: string[] = [];
+      for (const mp of metaParts) {
+        const subMatch = mp.match(/^(?:sub|subfitur|sub-fitur)\s*:\s*(.+)$/i);
+        if (subMatch) {
+          subFeatures = subMatch[1]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      }
+      const sepIdx = mainPart.search(/[—:]| - /);
+      const title = (sepIdx > 2 ? mainPart.slice(0, sepIdx) : mainPart).trim().replace(/[.,;]$/, "");
+      const description = sepIdx > 2 ? mainPart.slice(sepIdx + 1).replace(/^[—:\-\s]+/, "").trim() : "";
+      if (title) {
+        parsedFeatures.push({ title, description, subFeatures });
+      }
+    }
+  }
+
+  if (parsedFeatures.length === 0) {
+    const roadmap = buildRoadmap(tasks);
+    return roadmap.phases.map((phase) => ({
+      id: phase.id,
+      title: phase.hint,
+      description: `${phase.stats.total} task pada ${phase.title}`,
+      phaseLabel: phase.title.toUpperCase(),
+      subFeatures: phase.tasks.slice(0, 3).map((t) => t.title),
+      tasks: phase.tasks,
+      doneCount: phase.stats.done,
+      totalCount: phase.stats.total,
+    }));
+  }
+
+  const assignedTaskIds = new Set<string>();
+  const nodes: FeatureNode[] = parsedFeatures.map((feat, idx) => {
+    const normFeat = normalizeName(feat.title);
+    const matched = tasks.filter((t) => {
+      if (!t.feature) return false;
+      const normTaskFeat = normalizeName(t.feature);
+      const isMatch = normTaskFeat === normFeat || normTaskFeat.includes(normFeat) || normFeat.includes(normTaskFeat);
+      if (isMatch) assignedTaskIds.add(t.id);
+      return isMatch;
+    });
+    const phaseNum = Math.min(4, Math.floor(idx / Math.max(1, Math.ceil(parsedFeatures.length / 4))) + 1);
+    return {
+      id: `feat-${idx + 1}`,
+      title: feat.title,
+      description: feat.description,
+      phaseLabel: `FASE ${phaseNum}`,
+      subFeatures: feat.subFeatures.length > 0 ? feat.subFeatures : [feat.title],
+      tasks: matched,
+      doneCount: matched.filter((t) => t.done).length,
+      totalCount: matched.length,
+    };
+  });
+
+  // Distribusikan task tanpa label `fitur` secara merata agar tidak ada task tersembunyi.
+  const unassigned = tasks.filter((t) => !assignedTaskIds.has(t.id));
+  unassigned.forEach((task, i) => {
+    const target = nodes[i % nodes.length];
+    target.tasks.push(task);
+    target.totalCount += 1;
+    if (task.done) target.doneCount += 1;
+  });
+
+  for (const node of nodes) {
+    if (node.subFeatures.length === 1 && node.subFeatures[0] === node.title && node.tasks.length > 0) {
+      node.subFeatures = node.tasks.slice(0, 3).map((t) => t.title);
+    }
+  }
+
+  return nodes;
 }

@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { extractFeatureList } from "@/lib/roadmap";
-import { parseTasks, type ParsedTask } from "@/lib/tasks";
+import { useMemo, useState } from "react";
+import { deriveTitleFromPrd } from "@/lib/prd";
+import { buildFeatureTree } from "@/lib/roadmap";
+import { parseTasks, updateTaskStatusesInPrd, type TaskStatus } from "@/lib/tasks";
+import { IconBot, IconSparkles } from "./icons";
 import { MarkdownView } from "./MarkdownView";
-import { PrdMap } from "./PrdMap";
 import { useSse } from "./useSse";
+import { ImplementModal } from "./workspace/ImplementModal";
+import { PlanWizard } from "./workspace/PlanWizard";
+import { PrdWikiView } from "./workspace/PrdWikiView";
+import { RoadmapCanvas } from "./workspace/RoadmapCanvas";
+import { TaskKanban } from "./workspace/TaskKanban";
+import { WorkspaceAgent } from "./workspace/WorkspaceAgent";
 
 export interface WorkspaceMessage {
   id: string;
@@ -37,537 +44,500 @@ interface Props {
   project: WorkspaceProject;
   initialMessages: WorkspaceMessage[];
   initialPrd: string | null;
+  initialPrdVersion?: number;
   quota: WorkspaceQuota;
   models: { id: string; label: string; models: { id: string; model: string }[] }[];
 }
 
-type Tab = "preview" | "edit" | "tasks" | "map";
+type WorkspaceView = "roadmap" | "wiki" | "tasks";
 
-/**
- * Penghitung detik untuk fase "model belum mengeluarkan token".
- * Provider seperti Gemini bisa butuh puluhan detik untuk prompt PRD besar,
- * jadi user perlu melihat bahwa proses masih berjalan.
- */
-function ElapsedTimer() {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return <span className="tabular-nums">{seconds}s</span>;
-}
-
-function ThinkingBubble({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 text-sm text-slate-400">
-      <span className="flex gap-1">
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:0ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:150ms]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-sky-400 [animation-delay:300ms]" />
-      </span>
-      <span>
-        {label} (<ElapsedTimer />)
-      </span>
-    </div>
-  );
-}
-
-/** Ringkasan metadata task untuk ditampilkan di tab Task. */
-function taskMeta(task: ParsedTask): string {
-  const parts: string[] = [];
-  if (task.files.length) parts.push(`file: ${task.files.join(", ")}`);
-  if (task.depends.length) parts.push(`depends: ${task.depends.join(", ")}`);
-  if (task.complexity !== "?") parts.push(`kompleksitas: ${task.complexity}`);
-  return parts.join(" · ");
-}
-
-export function Workspace({ project, initialMessages, initialPrd, quota, models }: Props) {
+export function Workspace({
+  project,
+  initialMessages,
+  initialPrd,
+  initialPrdVersion = 1,
+  quota,
+  models,
+}: Props) {
   const router = useRouter();
   const { post, streaming } = useSse();
 
+  const [prd, setPrd] = useState(initialPrd ?? "");
+  const [prdVersion, setPrdVersion] = useState(initialPrdVersion);
+  const [projectTitle, setProjectTitle] = useState(project.title);
+  const [modelId, setModelId] = useState(project.modelId);
   const [messages, setMessages] = useState<WorkspaceMessage[]>(initialMessages);
-  const [draft, setDraft] = useState("");
+  const [quotaState, setQuotaState] = useState<WorkspaceQuota>(quota);
+
+  const [view, setView] = useState<WorkspaceView>("roadmap");
+  const [planMode, setPlanMode] = useState<"wizard" | "manual">("wizard");
+  const [agentOpen, setAgentOpen] = useState(true);
+  const [implementOpen, setImplementOpen] = useState(false);
+  const [taskFeatureFilter, setTaskFeatureFilter] = useState("ALL");
+
   const [streamText, setStreamText] = useState("");
   const [error, setError] = useState("");
-  const [warning, setWarning] = useState("");
-  const [prd, setPrd] = useState(initialPrd ?? "");
-  const [tab, setTab] = useState<Tab>("preview");
-  const [quotaState, setQuotaState] = useState(quota);
-  const [readyForPrd, setReadyForPrd] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [modelId, setModelId] = useState(project.modelId);
-  const [title, setTitle] = useState(project.title);
+  const [savingPrd, setSavingPrd] = useState(false);
+  const [manualInput, setManualInput] = useState("");
 
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const autoSentRef = useRef(false);
-  const tasks = useMemo(() => parseTasks(prd), [prd]);
-  const features = useMemo(() => extractFeatureList(prd), [prd]);
-  const doneCount = tasks.filter((t) => t.done).length;
+  const tasks = useMemo(() => (prd ? parseTasks(prd) : []), [prd]);
+  const features = useMemo(() => (prd ? buildFeatureTree(prd, tasks) : []), [prd, tasks]);
+  const subFeatureCount = useMemo(
+    () => features.reduce((sum, f) => sum + f.subFeatures.length, 0),
+    [features],
+  );
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, streamText]);
-
-  async function sendText(raw: string) {
-    const text = raw.trim();
-    if (!text || streaming || generating) return;
-    setError("");
-    setWarning("");
-    // Pesan user ditampilkan duluan supaya UI terasa responsif. Kalau request
-    // ditolak sebelum menyentuh server (401/429/400),server tidak menyimpannya
-    // jadi bubble ini harus dibuang lagi — kalau tidak, muncul di layar tapi
-    // hilang setelah reload.
-    const optimisticId = `local_${Date.now()}`;
-    setMessages((prev) => [...prev, { id: optimisticId, role: "user", content: text, createdAt: Date.now() }]);
-    setStreamText("");
-
-    let assistantText = "";
-    let saved = false;
-    await post(
-      `/api/projects/${project.id}/chat`,
-      { message: text },
-      {
-        onDelta: (delta) => {
-          assistantText += delta;
-          setStreamText(assistantText);
-        },
-        onDone: (data) => {
-          saved = true;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: String(data.messageId ?? `local_a_${Date.now()}`),
-              role: "assistant",
-              content: assistantText.replace(/\[\[SIAP_PRD\]\]/g, "").trim(),
-              createdAt: Date.now(),
-            },
-          ]);
-          setStreamText("");
-          if (data.readyForPrd) setReadyForPrd(true);
-          if (typeof data.warning === "string") setWarning(data.warning);
-        },
-        onError: (message) => {
-          setStreamText("");
-          setError(message);
-        },
-      },
-    );
-    if (!saved) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
-    }
-  }
-
-  // Kirim ide produk sebagai pesan pertama supaya AI langsung bertanya klarifikasi.
-  useEffect(() => {
-    if (autoSentRef.current) return;
-    if (initialMessages.length > 0) return;
-    if (!project.idea.trim()) return;
-    autoSentRef.current = true;
-    const timer = setTimeout(() => {
-      void sendText(project.idea);
-    }, 0);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function sendMessage(event: React.FormEvent) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft("");
-    await sendText(text);
-  }
-
-  async function generatePrd() {
-    if (generating || streaming) return;
-    setError("");
-    setWarning("");
-    setGenerating(true);
-    setTab("preview");
-    setStreamText("");
-    let output = "";
-
-    await post(
-      `/api/projects/${project.id}/generate`,
-      {},
-      {
-        onDelta: (delta) => {
-          output += delta;
-          setStreamText(output);
-        },
-        onDone: (data) => {
-          const prdData = data.prd as { content?: string } | undefined;
-          if (prdData?.content) {
-            setPrd(prdData.content);
-            setReadyForPrd(false);
-            setSavedAt(Date.now());
-          }
-          if (data.quota) {
-            const q = data.quota as WorkspaceQuota;
-            setQuotaState(q);
-          }
-          setStreamText("");
-          if (typeof data.warning === "string") setWarning(data.warning);
-          router.refresh();
-        },
-        onError: (message) => {
-          setStreamText("");
-          setError(message);
-        },
-      },
-    );
-    setGenerating(false);
-  }
-
-  async function savePrd() {
-    setSaving(true);
+  async function savePrdContent(nextPrd: string) {
+    const prevPrd = prd;
+    setPrd(nextPrd);
+    setSavingPrd(true);
     setError("");
     try {
       const res = await fetch(`/api/projects/${project.id}/prd`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: prd }),
+        body: JSON.stringify({ content: nextPrd }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(data.error ?? "Gagal menyimpan PRD.");
+        setPrd(prevPrd);
+        setError(data.error ?? "Gagal menyimpan perubahan PRD.");
         return;
       }
-      setSavedAt(Date.now());
-      router.refresh();
+      const data = (await res.json().catch(() => ({}))) as {
+        prd?: { content?: string; version?: number };
+      };
+      if (data.prd?.version) setPrdVersion(data.prd.version);
+      const nextTitle = deriveTitleFromPrd(nextPrd, projectTitle);
+      if (nextTitle) setProjectTitle(nextTitle);
     } catch {
-      setError("Tidak bisa menghubungi server.");
+      setPrd(prevPrd);
+      setError("Tidak bisa menghubungi server saat menyimpan PRD.");
     } finally {
-      setSaving(false);
+      setSavingPrd(false);
     }
   }
 
-  async function changeModel(nextModelId: string) {
-    setModelId(nextModelId);
-    await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modelId: nextModelId }),
-    });
+  async function updateTaskStatuses(taskIds: string[], nextStatus: TaskStatus) {
+    if (!prd || taskIds.length === 0) return;
+    const updated = updateTaskStatusesInPrd(prd, taskIds, nextStatus);
+    if (updated === prd) return;
+    await savePrdContent(updated);
   }
 
-  async function renameProject(nextTitle: string) {
-    setTitle(nextTitle);
-    await fetch(`/api/projects/${project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: nextTitle }),
-    });
+  async function toggleTaskDone(taskId: string, done: boolean) {
+    await updateTaskStatuses([taskId], done ? "done" : "todo");
   }
 
-  const busy = streaming || generating;
+  async function generatePrd(wizardContext?: string) {
+    if (streaming || !quotaState.allowed) return;
+    setError("");
+    setStreamText("");
 
-  return (
-    <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
-      <div className="no-print flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <Link href="/dashboard" className="shrink-0 text-sm text-slate-400 hover:text-white">
-            ← Dashboard
-          </Link>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={(e) => {
-              const next = e.target.value.trim();
-              if (next && next !== project.title) void renameProject(next);
+    if (wizardContext) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `wizard-${Date.now()}`,
+          role: "user",
+          content: wizardContext,
+          createdAt: Date.now(),
+        },
+      ]);
+    }
+
+    await post(
+      `/api/projects/${project.id}/generate`,
+      { modelId, wizardContext },
+      {
+        onDelta: (delta) => setStreamText((prev) => prev + delta),
+        onDone: (payload) => {
+          setStreamText("");
+          const nextPrdObj = payload.prd as { content?: string; version?: number } | undefined;
+          const nextQuota = payload.quota as WorkspaceQuota | undefined;
+          if (nextPrdObj?.content) {
+            setPrd(nextPrdObj.content);
+            setPrdVersion(nextPrdObj.version ?? 1);
+            const derived = deriveTitleFromPrd(nextPrdObj.content, projectTitle);
+            if (derived) setProjectTitle(derived);
+            setView("roadmap");
+            setAgentOpen(true);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `gen-done-${Date.now()}`,
+                role: "assistant",
+                content:
+                  "PRD, diagram Mermaid, skema database, dan daftar task sudah siap di Roadmap & Kanban.",
+                createdAt: Date.now(),
+              },
+            ]);
+          }
+          if (nextQuota) setQuotaState(nextQuota);
+          router.refresh();
+        },
+        onError: (msg) => {
+          setStreamText("");
+          setError(msg);
+        },
+      },
+    );
+  }
+
+  async function handleAgentSend(mode: "revise" | "chat", text: string) {
+    if (streaming) return;
+    setError("");
+    setStreamText("");
+
+    const userMsg: WorkspaceMessage = {
+      id: `u-${Date.now()}`,
+      role: "user",
+      content: text,
+      createdAt: Date.now(),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    if (mode === "revise") {
+      await post(
+        `/api/projects/${project.id}/revise`,
+        { instruction: text, modelId },
+        {
+          onDelta: (delta) => setStreamText((prev) => prev + delta),
+          onDone: (payload) => {
+            setStreamText("");
+            const nextPrdObj = payload.prd as { content?: string; version?: number } | undefined;
+            if (nextPrdObj?.content) {
+              setPrd(nextPrdObj.content);
+              setPrdVersion(nextPrdObj.version ?? prdVersion + 1);
+              const derived = deriveTitleFromPrd(nextPrdObj.content, projectTitle);
+              if (derived) setProjectTitle(derived);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `rev-${Date.now()}`,
+                  role: "assistant",
+                  content: `PRD diperbarui ke #v${nextPrdObj.version ?? prdVersion + 1}: "${text}".`,
+                  createdAt: Date.now(),
+                },
+              ]);
+            }
+          },
+          onError: (msg) => {
+            setStreamText("");
+            setError(msg);
+          },
+        },
+      );
+      return;
+    }
+
+    await post(
+      `/api/projects/${project.id}/chat`,
+      { message: text, modelId },
+      {
+        onDelta: (delta) => setStreamText((prev) => prev + delta),
+        onDone: (payload) => {
+          setStreamText((current) => {
+            const finalContent = current.trim();
+            if (finalContent) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: String(payload.messageId ?? `a-${Date.now()}`),
+                  role: "assistant",
+                  content: finalContent,
+                  createdAt: Date.now(),
+                },
+              ]);
+            }
+            return "";
+          });
+        },
+        onError: (msg) => {
+          setStreamText("");
+          setError(msg);
+        },
+      },
+    );
+  }
+
+  async function handleManualChatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = manualInput.trim();
+    if (!text || streaming) return;
+    setManualInput("");
+    await handleAgentSend("chat", text);
+  }
+
+  // Belum ada PRD: tampilkan PlanWizard terpandu (atau fallback chat manual).
+  if (!prd) {
+    if (planMode === "wizard") {
+      return (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <PlanWizard
+            project={{
+              id: project.id,
+              title: projectTitle,
+              idea: project.idea,
+              language: project.language,
+              modelId,
             }}
-            className="min-w-0 flex-1 rounded-lg border border-transparent bg-transparent px-2 py-1 text-lg font-semibold outline-none hover:border-slate-800 focus:border-sky-500"
-            aria-label="Judul project"
+            streaming={streaming}
+            streamText={streamText}
+            error={error}
+            quotaAllowed={quotaState.allowed}
+            onGenerate={generatePrd}
+            onSwitchToManualChat={() => setPlanMode("manual")}
           />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <select
-            value={modelId}
-            onChange={(e) => void changeModel(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs outline-none focus:border-sky-500"
-            aria-label="Model AI"
+      );
+    }
+
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-[#0d1326]/90 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setPlanMode("wizard")}
+              disabled={streaming}
+              className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-white"
+            >
+              ← Kembali ke Wizard
+            </button>
+            <h1 className="text-sm font-semibold text-white">{projectTitle}</h1>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void generatePrd()}
+            disabled={streaming || !quotaState.allowed}
+            className="btn-shine inline-flex items-center gap-1.5 rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50"
           >
-            {models.map((provider) => (
-              <optgroup key={provider.id} label={provider.label}>
-                {provider.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.model}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <span className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-300">
-            Kuota: {quotaState.remaining}/{quotaState.limit}
-          </span>
+            <IconSparkles className="h-3.5 w-3.5" />
+            <span>Buat PRD Sekarang</span>
+          </button>
+        </div>
+
+        <div className="flex min-h-[420px] flex-1 flex-col rounded-2xl border border-slate-800 bg-[#0a0f1f] p-4">
+          <div className="flex-1 space-y-3 overflow-y-auto">
+            {messages.length === 0 ? (
+              <p className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-xs text-slate-400">
+                Diskusikan detail kebutuhan aplikasimu atau klik <strong className="text-slate-200">Buat PRD Sekarang</strong>.
+              </p>
+            ) : (
+              messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`rounded-xl border px-3.5 py-2.5 text-xs ${
+                    m.role === "user"
+                      ? "ml-10 border-[#4f7cff]/40 bg-[#4f7cff]/12 text-slate-100"
+                      : "mr-10 border-slate-800 bg-[#0d1326] text-slate-200"
+                  }`}
+                >
+                  <MarkdownView content={m.content} className="text-xs" />
+                </div>
+              ))
+            )}
+            {streaming && streamText ? (
+              <div className="mr-10 rounded-xl border border-[#35d6ff]/40 bg-[#0d1326] p-3.5 text-xs">
+                <MarkdownView content={streamText} className="text-xs" renderMermaid={false} />
+              </div>
+            ) : null}
+          </div>
+
+          {error ? <p className="mt-2 text-xs text-red-300">{error}</p> : null}
+
+          <form onSubmit={(e) => void handleManualChatSubmit(e)} className="mt-3 flex gap-2">
+            <input
+              type="text"
+              value={manualInput}
+              onChange={(e) => setManualInput(e.target.value)}
+              placeholder="Ceritakan fitur tambahan atau target pengguna…"
+              className="flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3.5 py-2 text-xs text-slate-100 focus:border-[#35d6ff] focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={streaming || !manualInput.trim()}
+              className="rounded-xl bg-[#35d6ff] px-4 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"
+            >
+              Kirim
+            </button>
+          </form>
         </div>
       </div>
+      </div>
+    );
+  }
+
+  // PRD sudah ada: Workspace 3-view lengkap (Wiki | Roadmap | Lihat Task + Workspace Agent + Implemen modal).
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#070a14]">
+      {/* Workspace Top Bar */}
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 bg-[#0a0f1f]/95 px-4 py-2.5 sm:px-5 print:hidden">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Link
+            href="/dashboard"
+            className="rounded-lg border border-slate-800 bg-slate-900/70 px-2.5 py-1 text-xs text-slate-300 transition hover:border-slate-600 hover:text-white"
+          >
+            ← Project
+          </Link>
+          <h1 className="max-w-[200px] truncate text-sm font-semibold text-white sm:max-w-xs">
+            {projectTitle}
+          </h1>
+          <span className="rounded-full border border-[#35d6ff]/40 bg-[#35d6ff]/12 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#7fe3ff]">
+            #v{prdVersion}
+          </span>
+        </div>
+
+        {/* Center View Switcher: Wiki | Roadmap | Lihat Task */}
+        <nav
+          aria-label="Tampilan workspace PRD"
+          className="inline-flex items-center rounded-xl border border-slate-800 bg-slate-950/80 p-1 text-xs"
+        >
+          {(
+            [
+              { id: "wiki", label: "Wiki" },
+              { id: "roadmap", label: "Roadmap" },
+              { id: "tasks", label: `Lihat Task (${tasks.length})` },
+            ] as const
+          ).map((item) => {
+            const active = view === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  if (item.id === "tasks" && view !== "tasks") {
+                    setTaskFeatureFilter("ALL");
+                  }
+                  setView(item.id);
+                }}
+                className={`rounded-lg px-3 py-1.5 font-medium transition ${
+                  active
+                    ? "bg-linear-to-r from-[#4f7cff]/25 to-[#35d6ff]/25 text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right Controls */}
+        <div className="flex items-center gap-2">
+          {models.length > 0 ? (
+            <select
+              aria-label="Pilih model AI"
+              value={modelId}
+              onChange={(e) => {
+                const next = e.target.value;
+                setModelId(next);
+                void fetch(`/api/projects/${project.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ modelId: next }),
+                });
+              }}
+              className="hidden max-w-[155px] truncate rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-300 focus:border-[#35d6ff] focus:outline-none xl:block"
+            >
+              {models.map((p) => (
+                <optgroup key={p.id} label={p.label}>
+                  {p.models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.model}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => setImplementOpen(true)}
+            className="btn-shine inline-flex items-center gap-1.5 rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-3.5 py-1.5 text-xs font-semibold text-slate-950 shadow-md shadow-[#35d6ff]/20 transition hover:brightness-110"
+          >
+            <IconSparkles className="h-3.5 w-3.5" />
+            <span>Implemen</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAgentOpen((v) => !v)}
+            aria-expanded={agentOpen}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+              agentOpen
+                ? "border-[#35d6ff]/60 bg-[#35d6ff]/15 text-[#7fe3ff]"
+                : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-slate-500 hover:text-white"
+            }`}
+          >
+            <IconBot className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Workspace Agent</span>
+          </button>
+        </div>
+      </header>
 
       {error ? (
-        <p className="no-print mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+        <div className="border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-200 print:hidden">
           {error}
-        </p>
+        </div>
       ) : null}
 
-      {warning ? (
-        <p className="no-print mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          {warning}
-        </p>
-      ) : null}
+      {/* Main Split Body */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 overflow-hidden">
+          {view === "roadmap" ? (
+            <RoadmapCanvas
+              projectTitle={projectTitle}
+              prd={prd}
+              tasks={tasks}
+              saving={savingPrd}
+              onSavePrd={savePrdContent}
+              onToggleTaskDone={toggleTaskDone}
+              onOpenWiki={() => setView("wiki")}
+              onOpenFeatureTasks={(featureTitle) => {
+                setTaskFeatureFilter(featureTitle);
+                setView("tasks");
+              }}
+            />
+          ) : view === "wiki" ? (
+            <PrdWikiView prd={prd} onSavePrd={savePrdContent} saving={savingPrd} />
+          ) : (
+            <TaskKanban
+              tasks={tasks}
+              featureFilter={taskFeatureFilter}
+              onFeatureFilterChange={setTaskFeatureFilter}
+              onUpdateStatuses={updateTaskStatuses}
+            />
+          )}
+        </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {/* Panel chat */}
-        <section className="no-print flex h-[calc(100vh-13rem)] flex-col rounded-2xl border border-slate-800 bg-slate-900/40">
-          <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-            <div>
-              <h2 className="text-sm font-semibold">Ngobrol dengan AI</h2>
-              <p className="text-xs text-slate-500">AI akan tanya dulu sebelum menyusun PRD.</p>
-            </div>
-            {readyForPrd ? (
-              <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-300">Siap disusun</span>
-            ) : null}
-          </header>
-
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {messages.length === 0 && !streamText ? (
-              <div className="rounded-xl border border-dashed border-slate-800 p-4 text-sm text-slate-400">
-                <p className="font-medium text-slate-300">Mulai dari sini</p>
-                <p className="mt-1">Jawab pertanyaan AI satu per satu, atau ceritakan lebih detail idemu:</p>
-                <p className="mt-2 rounded-lg bg-slate-950/70 p-2 text-xs text-slate-400">
-                  &ldquo;Targetnya pemilik warung kopi kecil, fitur wajib: catat pesanan dan rekap harian. Batasannya harus
-                  jalan di HP Android murah.&rdquo;
-                </p>
-              </div>
-            ) : null}
-
-            {messages.map((message) => (
-              <div key={message.id} className={message.role === "user" ? "flex justify-end" : "flex justify-start"}>
-                <div
-                  className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm ${
-                    message.role === "user"
-                      ? "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950"
-                      : "border border-slate-800 bg-slate-950/70 text-slate-200"
-                  }`}
-                >
-                  {message.role === "assistant" ? (
-                    <MarkdownView content={message.content} />
-                  ) : (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {streamText ? (
-              <div className="flex justify-start">
-                <div className="max-w-[92%] rounded-2xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5">
-                  <MarkdownView content={streamText.replace(/\[\[SIAP_PRD\]\]/g, "")} />
-                  <span className="mt-1 inline-block h-3 w-1.5 animate-pulse bg-sky-400 align-middle" />
-                </div>
-              </div>
-            ) : streaming ? (
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3.5 py-2.5">
-                <ThinkingBubble label="Model sedang menyiapkan balasan" />
-              </div>
-            ) : null}
-            <div ref={chatEndRef} />
-          </div>
-
-          <form onSubmit={sendMessage} className="border-t border-slate-800 p-3">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void sendMessage(e);
-                  }
-                }}
-                rows={2}
-                maxLength={6000}
-                placeholder="Tulis jawaban atau pertanyaan... (Enter untuk kirim)"
-                className="flex-1 resize-none rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-sky-500"
-              />
-              <button
-                type="submit"
-                disabled={busy || !draft.trim()}
-                className="rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-4 py-2.5 text-sm font-medium text-slate-950 transition hover:brightness-110 disabled:opacity-50"
-              >
-                Kirim
-              </button>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => void generatePrd()}
-                disabled={busy || (!readyForPrd && messages.length === 0) || quotaState.remaining <= 0}
-                className={`rounded-lg px-4 py-2 text-sm font-medium transition ${
-                  readyForPrd
-                    ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                    : "border border-slate-700 text-slate-300 hover:border-slate-500"
-                } disabled:opacity-40`}
-              >
-                {generating ? "Menyusun PRD..." : prd ? "Susun ulang PRD" : "Generate PRD"}
-              </button>
-              <p className="text-xs text-slate-500">
-                {quotaState.remaining > 0
-                  ? `Sisa kuota bulan ini: ${quotaState.remaining}`
-                  : "Kuota habis — upgrade paket untuk lanjut"}
-              </p>
-            </div>
-          </form>
-        </section>
-
-        {/* Panel PRD */}
-        <section className="flex h-[calc(100vh-13rem)] flex-col rounded-2xl border border-slate-800 bg-slate-900/40">
-          <header className="no-print flex items-center justify-between gap-2 border-b border-slate-800 px-3 py-2.5">
-            <div className="flex gap-1 rounded-lg bg-slate-950/70 p-1">
-              {(
-                [
-                  ["preview", "Preview"],
-                  ["edit", "Editor"],
-                  ["tasks", `Task (${tasks.length})`],
-                  ["map", "Peta"],
-                ] as [Tab, string][]
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTab(value)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                    tab === value ? "bg-linear-to-r from-sky-500 to-violet-400 text-slate-950" : "text-slate-300 hover:text-white"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => void savePrd()}
-                disabled={saving || !prd}
-                className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 disabled:opacity-40"
-              >
-                {saving ? "Menyimpan..." : "Simpan"}
-              </button>
-              <a
-                href={`/api/projects/${project.id}/export?format=markdown`}
-                className={`rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 ${
-                  prd ? "" : "pointer-events-none opacity-40"
-                }`}
-              >
-                .md
-              </a>
-              <a
-                href={`/api/projects/${project.id}/export?format=pdf`}
-                title="Unduh PDF (paket Starter/Pro)"
-                className={`rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 ${
-                  prd ? "" : "pointer-events-none opacity-40"
-                }`}
-              >
-                .pdf
-              </a>
-              <button
-                type="button"
-                onClick={() => window.print()}
-                disabled={!prd}
-                className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500 disabled:opacity-40"
-              >
-                Cetak
-              </button>
-            </div>
-          </header>
-
-          <div className="print-area flex-1 overflow-y-auto px-5 py-4">
-            {generating || (streaming && !prd) ? (
-              streamText ? (
-                <MarkdownView content={streamText} />
-              ) : (
-                <div className="grid h-full place-items-center">
-                  <ThinkingBubble label="Menyusun PRD lengkap" />
-                </div>
-              )
-            ) : !prd ? (
-              <div className="grid h-full place-items-center text-center">
-                <div className="max-w-sm text-sm text-slate-400">
-                  <p className="font-medium text-slate-300">Belum ada PRD</p>
-                  <p className="mt-1">
-                    Selesaikan sesi tanya-jawab di panel kiri, lalu tekan <span className="text-sky-400">Generate PRD</span>.
-                  </p>
-                </div>
-              </div>
-            ) : tab === "preview" ? (
-              <>
-                <div className="no-print mb-3 flex items-center gap-2 text-xs text-slate-500">
-                  <span>Versi terakhir disimpan {savedAt ? "baru saja" : "di server"}</span>
-                </div>
-                <MarkdownView content={prd} />
-              </>
-            ) : tab === "edit" ? (
-              <textarea
-                value={prd}
-                onChange={(e) => setPrd(e.target.value)}
-                className="h-full w-full resize-none rounded-lg border border-slate-800 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-200 outline-none focus:border-sky-500"
-                spellCheck={false}
-              />
-            ) : tab === "map" ? (
-              <PrdMap tasks={tasks} features={features} projectTitle={title} />
-            ) : (
-              <div>
-                {tasks.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    Bagian Task Breakdown belum ada di PRD ini. Coba generate ulang, atau tambahkan manual dengan format
-                    <code className="mx-1 rounded bg-slate-800 px-1.5 py-0.5 text-xs">
-                      - [ ] T1 — judul | file: path | depends: none | kompleksitas: M
-                    </code>
-                  </p>
-                ) : (
-                  <>
-                    <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs text-slate-400">
-                        {tasks.length} task · {doneCount} selesai
-                      </p>
-                      <div className="flex gap-1.5">
-                        <a
-                          href={`/api/projects/${project.id}/export?format=tasks-md`}
-                          className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500"
-                        >
-                          Export checklist .md
-                        </a>
-                        <a
-                          href={`/api/projects/${project.id}/export?format=tasks-json`}
-                          className="rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-200 hover:border-slate-500"
-                        >
-                          Export .json
-                        </a>
-                      </div>
-                    </div>
-                    <ul className="space-y-2">
-                      {tasks.map((task) => (
-                        <li key={task.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                          <div className="flex items-start gap-2">
-                            <span className="mt-0.5 rounded bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-sky-300">
-                              {task.id}
-                            </span>
-                            <p className={`flex-1 text-sm ${task.done ? "text-slate-500 line-through" : "text-slate-200"}`}>
-                              {task.title}
-                            </p>
-                          </div>
-                          {taskMeta(task) ? <p className="mt-2 text-xs text-slate-500">{taskMeta(task)}</p> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
+        {agentOpen ? (
+          <WorkspaceAgent
+            messages={messages}
+            featureCount={features.length}
+            subFeatureCount={subFeatureCount}
+            taskCount={tasks.length}
+            streaming={streaming}
+            streamText={streamText}
+            error={error}
+            onSend={handleAgentSend}
+            onClose={() => setAgentOpen(false)}
+          />
+        ) : null}
       </div>
+
+      <ImplementModal
+        open={implementOpen}
+        projectId={project.id}
+        projectTitle={projectTitle}
+        prd={prd}
+        tasks={tasks}
+        onClose={() => setImplementOpen(false)}
+      />
     </div>
   );
 }

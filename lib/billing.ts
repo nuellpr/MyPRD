@@ -23,7 +23,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getPlan } from "./plans.ts";
 
-export type BillingProviderId = "mock" | "midtrans" | "mayar";
+export type BillingProviderId = "mock" | "midtrans" | "mayar" | "qris";
 export type OrderStatus = "pending" | "paid" | "failed" | "expired";
 
 export class BillingError extends Error {
@@ -47,7 +47,9 @@ export class BillingError extends Error {
  */
 export function billingProvider(): BillingProviderId {
   const configured = (process.env.BILLING_PROVIDER ?? "").trim().toLowerCase();
-  if (configured === "mock" || configured === "midtrans" || configured === "mayar") return configured;
+  if (configured === "mock" || configured === "midtrans" || configured === "mayar" || configured === "qris") {
+    return configured;
+  }
   if (midtransServerKey() !== "") return "midtrans";
   return "mock";
 }

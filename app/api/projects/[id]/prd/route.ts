@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { errorToResponse, jsonOk, readJson } from "@/lib/http";
-import { getPrd, getProject, savePrd, touchProject } from "@/lib/repo";
+import { deriveTitleFromPrd } from "@/lib/prd";
+import { getPrd, getProject, savePrd, updateProject } from "@/lib/repo";
 import { MAX_PRD_CHARS, sanitizeUserText } from "@/lib/safety";
 
 type Context = { params: Promise<{ id: string }> };
@@ -31,8 +32,9 @@ export async function PUT(request: Request, { params }: Context) {
     if (!content) return Response.json({ error: "Isi PRD tidak boleh kosong." }, { status: 400 });
 
     const prd = savePrd(project.id, content);
-    touchProject(project.id);
-    return jsonOk({ prd });
+    const title = deriveTitleFromPrd(prd.content, project.title);
+    updateProject(user.id, project.id, { title, status: "prd_ready" });
+    return jsonOk({ prd, title });
   } catch (error) {
     return errorToResponse(error);
   }

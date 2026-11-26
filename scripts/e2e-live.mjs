@@ -11,20 +11,22 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const MODEL = process.argv[2] ?? "gemini/gemini-3.5-flash-lite";
+const MODEL = process.argv[2] ?? "bangunweb/bw-swift";
 const PORT = Number(process.env.E2E_PORT ?? 3301);
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB_PATH = path.join("data", "e2e-live.db");
 
-// Baca .env.local supaya API key tersedia untuk server.
-function readEnvLocal() {
+// Baca .env lalu .env.local supaya API key tersedia untuk server.
+function readEnvFiles() {
   const out = {};
-  if (!fs.existsSync(".env.local")) return out;
-  for (const line of fs.readFileSync(".env.local", "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/);
-    if (!m) continue;
-    const value = m[2].trim().replace(/^["']|["']$/g, "");
-    if (value) out[m[1]] = value;
+  for (const file of [".env", ".env.local"]) {
+    if (!fs.existsSync(file)) continue;
+    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+      if (!m) continue;
+      const value = m[2].trim().replace(/^["']|["']$/g, "");
+      if (value) out[m[1]] = value;
+    }
   }
   return out;
 }
@@ -99,7 +101,7 @@ function waitForServer(timeoutMs = 90_000) {
 async function main() {
   for (const suffix of ["", "-wal", "-shm"]) fs.rmSync(`${DB_PATH}${suffix}`, { force: true });
 
-  const envLocal = readEnvLocal();
+  const envLocal = readEnvFiles();
   const server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", String(PORT)], {
     env: {
       ...process.env,
@@ -107,6 +109,8 @@ async function main() {
       NODE_ENV: "production",
       DATABASE_PATH: DB_PATH,
       FREE_MONTHLY_QUOTA: "3",
+      RESEND_API_KEY: "",
+      ALLOW_DEV_OTP: "1",
       AI_DEFAULT_MODEL: MODEL,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -134,13 +138,20 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ email, password: "rahasia12345", name: "Live Tester" }),
     });
+    const regBody = await json(reg);
     check("register 201", reg.status === 201, `status ${reg.status}`);
+    if (regBody.devCode) {
+      const ver = await api("/api/auth/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ email, code: regBody.devCode, purpose: "register" }),
+      });
+      check("verify OTP ok", ver.ok, `status ${ver.status}`);
+    }
     const models = await json(await api("/api/models"));
     const providerIds = (models.providers ?? []).map((p) => p.id);
     console.log("   provider tersedia:", providerIds.join(", "));
     console.log("   default model:", models.defaultModel);
     check("default model = model yang diminta", models.defaultModel === MODEL, models.defaultModel);
-    check("provider gemini tersedia", providerIds.includes("gemini"));
 
     console.log("\n2. Buat project dari ide");
     const idea =

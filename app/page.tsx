@@ -1,7 +1,18 @@
+import Image from "next/image";
 import Link from "next/link";
-import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { Suspense } from "react";
+import { Faq } from "@/components/Faq";
+import { Reveal, Stagger, StaggerItem, WordReveal } from "@/components/motion/Reveal";
 import { PricingCards } from "@/components/PricingCards";
+import { PromptComposer } from "@/components/PromptComposer";
+import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { ShowcaseCards } from "@/components/home/ShowcaseCards";
+import { StepsGrid } from "@/components/home/StepsGrid";
 import { currentUser } from "@/lib/auth";
+import { modelOptionsFor } from "@/lib/model-options";
+import { getSiteStats } from "@/lib/repo";
+
+export const dynamic = "force-dynamic";
 
 const STEPS = [
   {
@@ -22,6 +33,7 @@ const FEATURES = [
   {
     title: "PRD terstruktur, bukan teks panjang",
     body: "12 bagian baku: ringkasan, tujuan, target pengguna, ruang lingkup, fitur utama, user flow, kebutuhan non-fungsional, tech stack, kriteria selesai, task breakdown, pertanyaan terbuka.",
+    wide: true,
   },
   {
     title: "Task breakdown untuk AI coding agent",
@@ -47,6 +59,7 @@ const FEATURES = [
   {
     title: "Kuota & biaya terkendali",
     body: "Kuota per bulan, rate limiting, dan pencatatan pemakaian token per model supaya biaya AI tidak bocor.",
+    wide: true,
   },
 ];
 
@@ -71,133 +84,146 @@ const FAQ = [
 
 export default async function HomePage() {
   const user = await currentUser();
+  const stats = getSiteStats();
+  const { initialModel } = modelOptionsFor(user);
 
   return (
     <div className="flex min-h-full flex-col">
-      <SiteHeader authed={Boolean(user)} />
+      <SiteHeader authed={Boolean(user)} stats={stats} />
 
       <main className="flex-1">
+        {/* Hero Composer */}
         <section className="relative overflow-hidden border-b border-slate-800/80">
           <div aria-hidden className="pointer-events-none absolute inset-0">
             <div className="orb orb-a" />
             <div className="orb orb-b" />
           </div>
-          <div className="relative mx-auto max-w-6xl px-4 py-20 text-center">
-            <span className="hero-in inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
-              Untuk developer Indonesia · vibe coding tanpa hasil ngawur
-            </span>
-            <h1
-              className="hero-in mx-auto mt-6 max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl"
-              style={{ animationDelay: "90ms" }}
-            >
-              Dari ide ke{" "}
-              <span className="text-shimmer bg-linear-to-r from-sky-400 via-cyan-300 to-violet-400 bg-clip-text text-transparent">
-                PRD siap eksekusi
-              </span>{" "}
-              dalam hitungan menit
-            </h1>
-            <p
-              className="hero-in mx-auto mt-5 max-w-2xl text-base text-slate-300 sm:text-lg"
-              style={{ animationDelay: "180ms" }}
-            >
-              Ngobrol santai soal idemu, jawab beberapa pertanyaan, lalu dapat PRD lengkap + task breakdown yang bisa
-              langsung ditempel ke Claude Code, Cursor, atau OpenCode.
-            </p>
-            <div
-              className="hero-in mt-8 flex flex-wrap items-center justify-center gap-3"
-              style={{ animationDelay: "270ms" }}
-            >
-              <Link
-                href={user ? "/dashboard" : "/register"}
-                className="btn-shine rounded-lg bg-linear-to-r from-sky-500 to-violet-400 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/25 transition hover:brightness-110"
-              >
-                {user ? "Buka dashboard" : "Bikin PRD pertama (gratis)"}
-              </Link>
-              <a
-                href="#cara-kerja"
-                className="rounded-lg border border-slate-700 px-6 py-3 text-sm font-medium text-slate-200 transition hover:border-sky-400/60 hover:text-white"
-              >
-                Lihat cara kerjanya
-              </a>
+
+          <div className="relative mx-auto max-w-6xl px-4 pt-14 pb-20 text-center sm:pt-20 sm:pb-24">
+            <div className="mb-5 flex items-center justify-center gap-3">
+              <Image
+                src="/logo-mark.png"
+                alt=""
+                width={160}
+                height={132}
+                sizes="48px"
+                priority
+                className="float-y logo-glow h-10 w-auto rounded-xl"
+              />
+              <WordReveal
+                as="h1"
+                text="Mau bikin apa hari ini?"
+                highlightWords={["apa"]}
+                className="text-3xl font-bold tracking-tight text-white sm:text-5xl"
+              />
             </div>
-            <p className="hero-in mt-4 text-xs text-slate-500" style={{ animationDelay: "360ms" }}>
-              Tanpa kartu kredit · Bisa dicoba tanpa API key (mode demo) · Export markdown & PDF
+
+            <p className="hero-in mx-auto mb-8 max-w-xl text-sm text-slate-300 sm:text-base" style={{ animationDelay: "120ms" }}>
+              Dari ide jadi PRD lengkap + task breakdown siap tempel ke Claude Code, Cursor, atau OpenCode.
             </p>
+
+            <div className="hero-in" style={{ animationDelay: "180ms" }}>
+              <Suspense fallback={<div className="mx-auto h-48 max-w-3xl rounded-2xl border border-slate-800 bg-[#0d1326]/70" />}>
+                <PromptComposer authed={Boolean(user)} defaultModel={initialModel} variant="hero" />
+              </Suspense>
+            </div>
+
+            <ShowcaseCards authed={Boolean(user)} />
           </div>
         </section>
 
+        {/* Cara Kerja */}
         <section id="cara-kerja" className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-center text-2xl font-semibold sm:text-3xl">Cara kerjanya</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-400">
-            PRD yang bagus lahir dari pertanyaan yang tepat — bukan dari tebakan model.
-          </p>
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {STEPS.map((step) => (
-              <div
-                key={step.title}
-                className="reveal card-lift rounded-2xl border border-slate-800 bg-slate-900/40 p-6"
-              >
-                <h3 className="font-semibold text-sky-300">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-300">{step.body}</p>
-              </div>
-            ))}
-          </div>
+          <Reveal>
+            <h2 className="text-center text-2xl font-semibold text-white sm:text-3xl">Cara kerjanya</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-400">
+              PRD yang bagus lahir dari pertanyaan yang tepat — bukan dari tebakan model.
+            </p>
+          </Reveal>
+          <StepsGrid steps={STEPS} />
         </section>
 
-        <section id="fitur" className="border-y border-slate-800/80 bg-slate-900/20">
+        {/* Fitur Bento Grid */}
+        <section id="fitur" className="border-y border-slate-800/80 bg-[#070b17]/65">
           <div className="mx-auto max-w-6xl px-4 py-16">
-            <h2 className="text-center text-2xl font-semibold sm:text-3xl">Yang kamu dapat</h2>
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <Reveal>
+              <h2 className="text-center text-2xl font-semibold text-white sm:text-3xl">Yang kamu dapat</h2>
+              <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-400">
+                Semua yang dibutuhkan developer sebelum menulis baris kode pertama.
+              </p>
+            </Reveal>
+
+            <Stagger className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {FEATURES.map((feature) => (
-                <div
+                <StaggerItem
                   key={feature.title}
-                  className="reveal card-lift rounded-2xl border border-slate-800 bg-slate-950/60 p-6"
+                  className={`card-lift rounded-2xl border border-slate-800/90 bg-[#0b1020]/75 p-6 ${
+                    feature.wide ? "lg:col-span-2" : ""
+                  }`}
                 >
-                  <h3 className="font-semibold">{feature.title}</h3>
+                  <h3 className="font-semibold text-white">{feature.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.body}</p>
-                  {"href" in feature && typeof feature.href === "string" ? (
-                    <Link href={feature.href} className="mt-3 inline-block text-sm text-sky-400 hover:underline">
+                  {feature.href ? (
+                    <Link href={feature.href} className="mt-3 inline-block text-sm text-[#35d6ff] hover:underline">
                       Lihat template →
                     </Link>
                   ) : null}
-                </div>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           </div>
         </section>
 
+        {/* Harga */}
         <section id="harga" className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-center text-2xl font-semibold sm:text-3xl">Harga</h2>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-400">
-            Mulai gratis. Upgrade kalau kuota generate-nya sudah terasa kurang.
-          </p>
+          <Reveal>
+            <h2 className="text-center text-2xl font-semibold text-white sm:text-3xl">Harga</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-400">
+              Mulai gratis. Upgrade kalau kuota generate-nya sudah terasa kurang.
+            </p>
+          </Reveal>
           <div className="mt-10">
             <PricingCards highlight="free" />
           </div>
           <p className="mt-6 text-center text-xs text-slate-500">
-            Pembayaran lokal via Midtrans (QRIS, e-wallet, transfer bank) — klik paket berbayar untuk checkout.
+            Pembayaran lokal via Midtrans / Mayar (QRIS, e-wallet, transfer bank) — klik paket berbayar untuk checkout.
           </p>
         </section>
 
-        <section id="faq" className="border-t border-slate-800/80 bg-slate-900/20">
+        {/* FAQ */}
+        <section id="faq" className="border-t border-slate-800/80 bg-[#070b17]/65">
           <div className="mx-auto max-w-3xl px-4 py-16">
-            <h2 className="text-center text-2xl font-semibold sm:text-3xl">FAQ</h2>
-            <div className="mt-8 space-y-4">
-              {FAQ.map((item) => (
-                <details
-                  key={item.q}
-                  className="card-lift group rounded-xl border border-slate-800 bg-slate-950/60 p-5"
-                >
-                  <summary className="cursor-pointer list-none font-medium text-slate-100 marker:hidden">
-                    <span className="mr-2 text-sky-400 group-open:hidden">+</span>
-                    <span className="mr-2 hidden text-sky-400 group-open:inline">−</span>
-                    {item.q}
-                  </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-400">{item.a}</p>
-                </details>
-              ))}
-            </div>
+            <Reveal>
+              <h2 className="text-center text-2xl font-semibold text-white sm:text-3xl">FAQ</h2>
+            </Reveal>
+            <Faq items={FAQ} />
           </div>
+        </section>
+
+        {/* CTA Band */}
+        <section className="mx-auto max-w-5xl px-4 py-16">
+          <Reveal>
+            <div className="glow-border rounded-3xl bg-[#0c1328]/85 p-8 text-center sm:p-12">
+              <h2 className="text-2xl font-bold text-white sm:text-3xl">Siap ubah idemu jadi blueprint coding?</h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-slate-300">
+                Mulai gratis tanpa kartu kredit — coba langsung di mode demo atau hubungkan model AI favoritmu.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  href={user ? "/dashboard" : "/register"}
+                  className="btn-shine rounded-full bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-[#35d6ff]/20 transition hover:brightness-110"
+                >
+                  {user ? "Buka dashboard" : "Daftar gratis"}
+                </Link>
+                <Link
+                  href="/templates"
+                  className="rounded-full border border-slate-700 px-6 py-3 text-sm font-medium text-slate-200 transition hover:border-[#35d6ff]/60 hover:text-white"
+                >
+                  Jelajahi template
+                </Link>
+              </div>
+            </div>
+          </Reveal>
         </section>
       </main>
 

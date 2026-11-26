@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { SiteHeader } from "@/components/SiteChrome";
 import { Workspace, type WorkspaceMessage, type WorkspaceQuota } from "@/components/Workspace";
 import { currentUser } from "@/lib/auth";
-import { getAvailableProviders } from "@/lib/env";
+import { getAvailableProviders, resolveActiveModelId } from "@/lib/env";
 import { getProject, getPrd, getQuotaState, listMessages } from "@/lib/repo";
 
 export default async function ProjectPage({ params }: PageProps<"/dashboard/[id]">) {
@@ -28,19 +28,20 @@ export default async function ProjectPage({ params }: PageProps<"/dashboard/[id]
   }));
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <SiteHeader authed />
       <Workspace
         project={{
           id: project.id,
           title: project.title,
           idea: project.idea,
-          modelId: project.modelId,
+          modelId: resolveActiveModelId(undefined, project.modelId),
           language: project.language === "en" ? "en" : "id",
           updatedAt: project.updatedAt,
         }}
         initialMessages={messages}
         initialPrd={prd?.content ?? null}
+        initialPrdVersion={prd?.version ?? 1}
         quota={quota}
         models={models}
       />

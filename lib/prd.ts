@@ -1,11 +1,11 @@
 /**
- * System prompt & helper untuk alur "ngobrol → PRD".
+ * System prompt & helper untuk alur "ngobrol / wizard → PRD".
  *
  * PRD yang dihasilkan harus cukup detail supaya AI coding agent (Claude Code,
- * Cursor, OpenCode, dll) bisa langsung eksekusi. Karena itu strukturnya dibuat
- * baku dan selalu diakhiri bagian kriteria selesai + task breakdown.
+ * Cursor, OpenCode, Antigravity, dll) bisa langsung eksekusi.
  */
 import type { ChatMessage } from "./ai.ts";
+import type { ParsedTask } from "./tasks.ts";
 
 export const PRD_SECTIONS = [
   "Ringkasan Produk",
@@ -46,23 +46,39 @@ export function chatSystemPrompt(language: Language): string {
   ].join("\n");
 }
 
-/** System prompt mode generate: menghasilkan PRD final dari percakapan. */
+/** System prompt mode generate: menghasilkan PRD final lengkap dengan diagram Mermaid, schema DB, dan task list per fitur. */
 export function generateSystemPrompt(language: Language): string {
   return [
     "MODE: GENERATE_PRD",
     "Kamu adalah technical writer produk. Ubah percakapan berikut menjadi PRD final berbahasa " + languageName(language) + ".",
     "",
     "SYARAT OUTPUT:",
-    "- Output HANYA markdown PRD, tanpa pembuka/penutup, tanpa code fence pembungkus.",
+    "- Output HANYA markdown PRD, tanpa pembuka/penutup, tanpa code fence pembungkus di luar dokumen.",
     "- Mulai dengan heading H1 berisi judul produk: `# PRD: <judul singkat produk>`.",
     `- Gunakan tepat bagian berikut, dengan heading level 2: ${PRD_SECTIONS.map((s) => `## ${s}`).join(" | ")}`,
-    "- Bagian 'Fitur Utama': setiap fitur punya deskripsi, alur singkat, dan kriteria selesai yang bisa diverifikasi (bullet list).",
-    "- Bagian 'Task Breakdown untuk AI Coding Agent': daftar task granular dalam format:",
-    "  `- [ ] T1 — <judul task> | file: <path yang disarankan> | depends: <T0/none> | kompleksitas: S/M/L`",
-    "  Sertakan 8-20 task yang urut secara dependensi dan cukup detail untuk ditempel ke Claude Code/Cursor.",
-    "- Bagian 'Kriteria Selesai': checklist `- [ ]` yang terukur.",
+    "- Bagian 'Fitur Utama': daftar 4-7 fitur inti dengan format `- **Nama Fitur** — deskripsi singkat | sub: Sub-fitur 1, Sub-fitur 2, Sub-fitur 3`, diikuti sub-heading `### Urutan Rilis Sesuai Fase` (Fase 1 sampai Fase 4).",
+    "- Bagian 'User Flow': tulis langkah per aktor, lalu sertakan sub-heading `### Diagram Alur Utama` dengan satu blok ```mermaid `sequenceDiagram` yang valid (pakai tanda kutip pada label dengan spasi).",
+    "- Bagian 'Tech Stack': sertakan tabel markdown `| Bagian | Rekomendasi | Alasan |`, sub-heading `### Arsitektur Sistem` dengan blok ```mermaid `flowchart LR`, dan sub-heading `### Database Schema` berisi blok ```mermaid `erDiagram` serta tabel markdown kolom per tabel (`| Kolom | Tipe | Kegunaan |`).",
+    "- Bagian 'Task Breakdown untuk AI Coding Agent': daftar 12-24 task granular dalam format persis:",
+    "  `- [ ] T1 — <judul task> | fitur: <Nama Fitur dari Fitur Utama> | prioritas: utama | file: <path yang disarankan> | depends: <T0/none> | kompleksitas: S/M/L`",
+    "  Nilai `prioritas:` adalah `utama`, `penting`, atau `tambahan`.",
+    "- Bagian 'Kriteria Selesai (Acceptance Criteria)': checklist `- [ ]` yang terukur.",
     "- Kalau ada informasi yang tidak diketahui, tulis di 'Pertanyaan Terbuka', jangan dikarang.",
-    "- Tulis requirement teknis eksplisit (endpoint, tabel data, komponen UI) bila sudah disebut user.",
+  ].join("\n");
+}
+
+/** System prompt untuk Workspace Agent saat merevisi PRD yang sudah ada. */
+export function reviseSystemPrompt(language: Language, currentPrd: string): string {
+  return [
+    "MODE: REVISE_PRD",
+    `Kamu adalah Workspace Agent untuk merevisi dokumen PRD berbahasa ${languageName(language)}.`,
+    "ATURAN:",
+    "- Output HANYA markdown PRD lengkap yang sudah diperbarui, tanpa kalimat pembuka/penutup atau code fence pembungkus.",
+    "- Pertahankan semua 12 heading H2 yang ada, diagram Mermaid, tabel Database Schema, serta progress checkbox `[x]` dan `status:` pada task yang sudah ada.",
+    "- Terapkan revisi dari user secara konsisten di bagian Fitur Utama, User Flow, Database Schema (jika perlu), dan Task Breakdown.",
+    "",
+    "PRD SAAT INI:",
+    currentPrd,
   ].join("\n");
 }
 
@@ -77,8 +93,6 @@ export function buildMessages({ language, history, idea, mode }: BuildMessagesIn
   const system = mode === "generate" ? generateSystemPrompt(language) : chatSystemPrompt(language);
   const messages: ChatMessage[] = [{ role: "system", content: system }];
   if (idea) {
-    // Ide asli selalu jadi konteks pertama supaya judul & isi PRD tidak bergeser
-    // ke topik jawaban klarifikasi terakhir.
     messages.push({
       role: "user",
       content: mode === "generate" ? `Ide produk awal dari user: ${idea}` : `Ide produk saya: ${idea}`,
@@ -89,9 +103,6 @@ export function buildMessages({ language, history, idea, mode }: BuildMessagesIn
     messages.push(m);
   }
   if (mode === "generate") {
-    // Sebagian provider (mis. Gemini) menolak request yang berakhir dengan
-    // giliran model: "Requests ending with a model turn are not supported".
-    // Karena itu percakapan selalu ditutup instruksi user yang eksplisit.
     messages.push({
       role: "user",
       content:
@@ -99,6 +110,53 @@ export function buildMessages({ language, history, idea, mode }: BuildMessagesIn
     });
   }
   return messages;
+}
+
+export function buildReviseMessages(input: {
+  language: Language;
+  currentPrd: string;
+  instruction: string;
+  idea?: string;
+}): ChatMessage[] {
+  return [
+    { role: "system", content: reviseSystemPrompt(input.language, input.currentPrd) },
+    {
+      role: "user",
+      content: `${input.idea ? `Konteks ide awal: ${input.idea}\n\n` : ""}Permintaan revisi PRD:\n${input.instruction}\n\nKeluarkan hanya markdown PRD terbaru yang lengkap.`,
+    },
+  ];
+}
+
+/** Susun prompt implementasi siap tempel untuk modal "Implemen" (Claude Code / Cursor / Antigravity / Codex). */
+export function buildImplementationPrompt(projectTitle: string, prdMarkdown: string, tasks: ParsedTask[]): string {
+  const pending = tasks.filter((t) => !t.done);
+  const taskLines = (pending.length > 0 ? pending : tasks)
+    .map((t) => {
+      const meta: string[] = [];
+      if (t.feature) meta.push(`fitur: ${t.feature}`);
+      if (t.files.length) meta.push(`file: ${t.files.join(", ")}`);
+      if (t.depends.length) meta.push(`depends: ${t.depends.join(", ")}`);
+      meta.push(`prioritas: ${t.priority}`);
+      return `- [ ] ${t.id} — ${t.title} (${meta.join(" | ")})`;
+    })
+    .join("\n");
+
+  return [
+    `Kamu akan mengimplementasikan project "${projectTitle}" secara bertahap sesuai PRD dan daftar task di bawah ini.`,
+    "",
+    "INSTRUKSI KERJA UNTUK AI CODING AGENT:",
+    "1. Baca spesifikasi arsitektur, database schema, user flow, dan acceptance criteria pada PRD terlebih dahulu.",
+    "2. Kerjakan task secara berurutan mengikuti dependency (`depends`) dari Fase 1 hingga selesai.",
+    "3. Setelah menyelesaikan satu task, jalankan typecheck/lint/test untuk memverifikasi tidak ada error sebelum lanjut ke task berikutnya.",
+    "4. Jangan hardcode secret atau API key — gunakan environment variables.",
+    "",
+    `## Daftar Task yang Harus Dikerjakan (${pending.length}/${tasks.length} tersisa)`,
+    taskLines || "(Lihat bagian Task Breakdown pada PRD di bawah)",
+    "",
+    "---",
+    "",
+    prdMarkdown.trim(),
+  ].join("\n");
 }
 
 /** Deteksi penanda dari model bahwa informasi sudah cukup untuk menyusun PRD. */
@@ -112,10 +170,7 @@ export function stripMarkers(text: string): string {
 
 /**
  * Filter streaming untuk marker internal: menahan ekor teks yang mungkin
- * bagian dari `[[SIAP_PRD]]` supaya marker tidak pernah sampai ke klien,
- * termasuk saat terbagi antar chunk (`[[SIAP` + `_PRD]]`).
- *
- * Pakai `push()` untuk setiap delta lalu `flush()` di akhir stream.
+ * bagian dari `[[SIAP_PRD]]` supaya marker tidak pernah sampai ke klien.
  */
 export function createMarkerFilter(marker = "[[SIAP_PRD]]") {
   let pending = "";
@@ -165,8 +220,6 @@ function truncateTitle(text: string, max = 80): string {
 export function deriveTitleFromPrd(markdown: string, fallback: string): string {
   const h1 = markdown.match(/^#\s+(.+)$/m);
   if (h1) return truncateTitle(h1[1].replace(/^PRD[:\-\s]*/i, "")) || fallback;
-  // Tanpa H1: pakai kalimat pertama dari Ringkasan Produk supaya judul tidak
-  // terpotong di tengah kalimat.
   const summary = markdown.match(/^##\s+1?\.?\s*Ringkasan Produk\s*\n+([^\n#]+)/m);
   if (summary) {
     const firstLine = summary[1].trim();

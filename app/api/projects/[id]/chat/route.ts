@@ -3,9 +3,9 @@ import { StreamStalledError, streamChat } from "@/lib/ai";
 import { errorToResponse, SSE_HEADERS, sseEvent, toReadableStream } from "@/lib/http";
 import { AI_RATE_LIMIT, rateLimit } from "@/lib/rate-limit";
 import { buildMessages, createMarkerFilter, isReadyForPrd, stripMarkers, type Language } from "@/lib/prd";
-import { addMessage, getProject, listMessages, recordUsage, touchProject } from "@/lib/repo";
+import { addMessage, getProject, listMessages, recordUsage, touchProject, updateProject } from "@/lib/repo";
 import { estimateCostUsd } from "@/lib/plans";
-import { findProvider, parseModelId } from "@/lib/env";
+import { findProvider, parseModelId, resolveActiveModelId } from "@/lib/env";
 import { MAX_USER_MESSAGE_CHARS, sanitizeUserText, wrapUserContent } from "@/lib/safety";
 import { withHeartbeat } from "@/lib/sse-heartbeat";
 import type { ChatMessage } from "@/lib/ai";
@@ -36,9 +36,15 @@ export async function POST(request: Request, { params }: Context) {
       );
     }
 
-    const body = (await request.json().catch(() => ({}))) as { message?: string };
+    const body = (await request.json().catch(() => ({}))) as { message?: string; modelId?: unknown };
     const text = sanitizeUserText(body.message, MAX_USER_MESSAGE_CHARS);
     if (!text) return Response.json({ error: "Pesan tidak boleh kosong." }, { status: 400 });
+
+    const requestedModel = typeof body.modelId === "string" ? body.modelId : undefined;
+    const activeModelId = resolveActiveModelId(requestedModel, project.modelId);
+    if (activeModelId !== project.modelId) {
+      updateProject(user.id, project.id, { modelId: activeModelId });
+    }
 
     const history = listMessages(project.id).map((m) => ({ role: m.role, content: m.content }) as ChatMessage);
     addMessage(project.id, "user", text);
@@ -50,10 +56,10 @@ export async function POST(request: Request, { params }: Context) {
       mode: "chat",
     });
 
-    const { stream, usage } = streamChat({ modelId: project.modelId, messages, maxOutputTokens: 1500 });
+    const { stream, usage } = streamChat({ modelId: activeModelId, messages, maxOutputTokens: 1500 });
 
     const encoder = (async function* () {
-      yield sseEvent({ type: "start", modelId: project.modelId });
+      yield sseEvent({ type: "start", modelId: activeModelId });
       let output = "";
       let stalled = false;
       // Marker [[SIAP_PRD]] ditahan di server supaya tidak pernah sampai ke UI,
@@ -92,7 +98,7 @@ export async function POST(request: Request, { params }: Context) {
       touchProject(project.id);
 
       const u = await usage;
-      const parsed = parseModelId(project.modelId);
+      const parsed = parseModelId(activeModelId);
       const provider = parsed ? findProvider(parsed.providerId) : undefined;
       recordUsage({
         userId: user.id,
