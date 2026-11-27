@@ -57,7 +57,6 @@ export function Workspace({
   initialPrd,
   initialPrdVersion = 1,
   quota,
-  models,
 }: Props) {
   const router = useRouter();
   const { post, streaming } = useSse();
@@ -65,7 +64,7 @@ export function Workspace({
   const [prd, setPrd] = useState(initialPrd ?? "");
   const [prdVersion, setPrdVersion] = useState(initialPrdVersion);
   const [projectTitle, setProjectTitle] = useState(project.title);
-  const [modelId, setModelId] = useState(project.modelId);
+  const modelId = project.modelId;
   const [messages, setMessages] = useState<WorkspaceMessage[]>(initialMessages);
   const [quotaState, setQuotaState] = useState<WorkspaceQuota>(quota);
 
@@ -428,33 +427,6 @@ export function Workspace({
 
         {/* Right Controls */}
         <div className="flex items-center gap-2">
-          {models.length > 0 ? (
-            <select
-              aria-label="Pilih model AI"
-              value={modelId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setModelId(next);
-                void fetch(`/api/projects/${project.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ modelId: next }),
-                });
-              }}
-              className="hidden max-w-[155px] truncate rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1.5 text-xs text-slate-300 focus:border-[#35d6ff] focus:outline-none xl:block"
-            >
-              {models.map((p) => (
-                <optgroup key={p.id} label={p.label}>
-                  {p.models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.model}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          ) : null}
-
           <button
             type="button"
             onClick={() => setImplementOpen(true)}

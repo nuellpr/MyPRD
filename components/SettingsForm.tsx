@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { Reveal } from "@/components/motion/Reveal";
-import type { ModelOption } from "@/lib/model-options";
-import { IconBot, IconCheck, IconLock, IconMail, IconUser } from "./icons";
+import { IconCheck, IconLock, IconMail, IconUser } from "./icons";
 
 interface SettingsFormProps {
   initialName: string;
@@ -14,8 +13,6 @@ interface SettingsFormProps {
   initialPhone: string;
   initialBio: string;
   hasPassword: boolean;
-  providers: ModelOption[];
-  defaultModel: string;
 }
 
 const inputClass =
@@ -27,14 +24,11 @@ export function SettingsForm({
   initialPhone,
   initialBio,
   hasPassword,
-  providers,
-  defaultModel,
 }: SettingsFormProps) {
   const router = useRouter();
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [bio, setBio] = useState(initialBio);
-  const [modelId, setModelId] = useState(defaultModel);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +48,7 @@ export function SettingsForm({
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, bio, defaultModelId: modelId }),
+        body: JSON.stringify({ name, phone, bio }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan pengaturan.");
@@ -165,45 +159,6 @@ export function SettingsForm({
                 />
               </div>
             </div>
-          </section>
-        </Reveal>
-
-        <Reveal delay={0.05}>
-          <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
-            <div className="mb-1 flex items-center gap-2">
-              <IconBot className="h-4 w-4 text-[#35d6ff]" />
-              <h2 className="text-sm font-semibold text-white">Model AI default</h2>
-            </div>
-            <p className="mb-4 text-xs leading-relaxed text-slate-400">
-              Dipakai untuk project baru. Kamu tetap bisa ganti model per project di workspace.
-            </p>
-            <label htmlFor="settings-model" className="sr-only">
-              Model AI default
-            </label>
-            <select
-              id="settings-model"
-              value={modelId}
-              onChange={(event) => {
-                setModelId(event.target.value);
-                setSaved(false);
-              }}
-              className={inputClass}
-            >
-              {providers.map((provider) => (
-                <optgroup key={provider.id} label={provider.label}>
-                  {provider.models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.model}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {providers.length === 1 && providers[0].id === "mock" ? (
-              <p className="mt-2 text-xs text-amber-300/80">
-                Belum ada API key provider. Tambahkan di <code className="text-amber-200">.env</code> untuk memakai model lain.
-              </p>
-            ) : null}
           </section>
         </Reveal>
 

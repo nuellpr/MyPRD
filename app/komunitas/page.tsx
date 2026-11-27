@@ -29,7 +29,7 @@ export default async function KomunitasPage() {
           Susun PRD, kumpulkan lencana, dan diskusi bareng builder lain di Discord.
         </p>
         <a
-          href="https://discord.gg/w3pn2Ey3P"
+          href="https://discord.gg/yVQWsrQDbM"
           target="_blank"
           rel="noreferrer"
           className="btn-shine mt-4 inline-block rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-sm font-semibold text-slate-950 transition hover:brightness-110"

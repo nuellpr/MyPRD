@@ -125,10 +125,8 @@ test("provider bangunweb muncul saat BANGUNWEB_API_KEY diisi dan defaultModelId 
     assert.ok(bw, "provider bangunweb harus tersedia");
     assert.equal(bw?.label, "BangunWeb AI Router");
     assert.equal(bw?.baseUrl, "https://router.bangunweb.com/v1");
-    assert.ok(bw?.models.includes("bw-swift"));
     assert.ok(bw?.models.includes("gpt-6.2-astra"));
-    assert.ok(bw?.models.includes("gpt-6.2-sol"));
-    assert.equal(defaultModelId(), "bangunweb/bw-swift");
+    assert.equal(defaultModelId(), "bangunweb/gpt-6.2-astra");
   } finally {
     delete process.env.BANGUNWEB_API_KEY;
   }

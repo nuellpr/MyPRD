@@ -36,6 +36,9 @@ const DOT_COLORS = [
   "bg-pink-400 shadow-[0_0_8px_rgba(244,114,182,0.8)]",
 ] as const;
 
+const SPRING_SNAPPY = { type: "spring", stiffness: 460, damping: 24 } as const;
+const SPRING_PANEL = { type: "spring", stiffness: 340, damping: 28 } as const;
+
 function NavIcon({ kind, className = "h-4 w-4" }: { kind: NavItem["icon"]; className?: string }) {
   switch (kind) {
     case "home":
@@ -126,6 +129,7 @@ export function GlassySidebar({
   const pathname = usePathname();
   const reduced = useReducedMotion();
   const [query, setQuery] = useState("");
+  const [hoveredTip, setHoveredTip] = useState<string | null>(null);
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const [user, setUser] = useState<SidebarUser | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -236,126 +240,254 @@ export function GlassySidebar({
   const quotaPct = user ? Math.round((user.quotaUsed / user.quotaLimit) * 100) : 25;
   const userInitial = (user?.name || user?.email || (authed ? "M" : "G")).trim().charAt(0).toUpperCase();
 
-  const quickSpots = authed && projects.length > 0
-    ? projects.map((p, idx) => ({
-        key: p.id,
-        href: `/dashboard/${p.id}`,
-        label: p.title,
-        dot: DOT_COLORS[idx % DOT_COLORS.length],
-      }))
-    : [
-        { key: "tpl", href: "/templates", label: "Starter Kit Template", dot: DOT_COLORS[0] },
-        { key: "kom", href: "/komunitas", label: "Komunitas Builder", dot: DOT_COLORS[1] },
-        { key: "faq", href: "/#faq", label: "FAQ & Keamanan", dot: DOT_COLORS[2] },
-      ];
+  const quickSpots =
+    authed && projects.length > 0
+      ? projects.map((p, idx) => ({
+          key: p.id,
+          href: `/dashboard/${p.id}`,
+          label: p.title,
+          dot: DOT_COLORS[idx % DOT_COLORS.length],
+        }))
+      : [
+          { key: "tpl", href: "/templates", label: "Starter Kit Template", dot: DOT_COLORS[0] },
+          { key: "kom", href: "/komunitas", label: "Komunitas Builder", dot: DOT_COLORS[1] },
+          { key: "faq", href: "/#faq", label: "FAQ & Keamanan", dot: DOT_COLORS[2] },
+        ];
 
   function openWithSearch() {
+    setHoveredTip(null);
     onOpenChange(true);
     window.setTimeout(() => searchInputRef.current?.focus(), 90);
   }
 
   return (
     <>
-      {/* Desktop Collapsed Floating Pill Dock */}
-      {floatingDock && !open ? (
-        <aside
-          aria-label="Dock navigasi cepat"
-          className="no-print glassy-sidebar-shell fixed top-1/2 left-3.5 z-40 hidden w-[62px] -translate-y-1/2 flex-col items-center gap-2 rounded-[34px] px-2 py-3 xl:flex"
-        >
-          <button
+      {/* Desktop Collapsed Floating Pill Dock (beranimasi spring) */}
+      <AnimatePresence>
+        {floatingDock && !open ? (
+          <motion.aside
+            key="glassy-dock"
+            aria-label="Dock navigasi cepat"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, x: -24, scale: 0.92 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, x: -20, scale: 0.92 }}
+            transition={reduced ? { duration: 0.01 } : SPRING_PANEL}
+            className="no-print glassy-sidebar-shell fixed top-1/2 left-3.5 z-40 hidden w-[62px] -translate-y-1/2 flex-col items-center gap-2 rounded-[34px] px-2 py-3 xl:flex"
+          >
+            <motion.button
+              type="button"
+              onClick={() => {
+                setHoveredTip(null);
+                onOpenChange(true);
+              }}
+              onHoverStart={() => setHoveredTip("brand")}
+              onHoverEnd={() => setHoveredTip((cur) => (cur === "brand" ? null : cur))}
+              whileHover={reduced ? undefined : { scale: 1.12, rotate: -6 }}
+              whileTap={reduced ? undefined : { scale: 0.92 }}
+              transition={SPRING_SNAPPY}
+              aria-label="Perluas sidebar navigasi"
+              className="relative grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white/15 shadow-inner hover:bg-white/25"
+            >
+              <Image src="/logo-mark.png" alt="MyPRD" width={36} height={30} className="h-6 w-auto" />
+              <AnimatePresence>
+                {hoveredTip === "brand" ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -8, scale: 0.92 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -6, scale: 0.92 }}
+                    transition={{ duration: 0.14 }}
+                    className="pointer-events-none absolute left-13 z-50 rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl"
+                  >
+                    Perluas navigasi (⌘K)
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
+            </motion.button>
+
+            <motion.button
+              type="button"
+              onClick={openWithSearch}
+              onHoverStart={() => setHoveredTip("search")}
+              onHoverEnd={() => setHoveredTip((cur) => (cur === "search" ? null : cur))}
+              whileHover={reduced ? undefined : { scale: 1.12 }}
+              whileTap={reduced ? undefined : { scale: 0.92 }}
+              transition={SPRING_SNAPPY}
+              aria-label="Cari halaman atau project"
+              className="relative grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-white/10 text-slate-200 hover:bg-white/20 hover:text-white"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <AnimatePresence>
+                {hoveredTip === "search" ? (
+                  <motion.span
+                    initial={{ opacity: 0, x: -8, scale: 0.92 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -6, scale: 0.92 }}
+                    transition={{ duration: 0.14 }}
+                    className="pointer-events-none absolute left-13 z-50 rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl"
+                  >
+                    Cari (⌘K)
+                  </motion.span>
+                ) : null}
+              </AnimatePresence>
+            </motion.button>
+
+            <nav aria-label="Menu utama" className="mt-1 flex flex-col items-center gap-1.5">
+              {items.map((item) => {
+                const active = isNavActive(pathname, item);
+                return (
+                  <motion.div
+                    key={item.id}
+                    onHoverStart={() => setHoveredTip(item.id)}
+                    onHoverEnd={() => setHoveredTip((cur) => (cur === item.id ? null : cur))}
+                    whileHover={reduced ? undefined : { scale: 1.14, x: 2 }}
+                    whileTap={reduced ? undefined : { scale: 0.9 }}
+                    transition={SPRING_SNAPPY}
+                    className="relative"
+                  >
+                    <Link
+                      href={item.href}
+                      aria-label={item.label}
+                      className={`relative grid h-10 w-10 place-items-center rounded-full transition-colors ${
+                        active ? "text-slate-950" : "text-slate-200/85 hover:bg-white/15 hover:text-white"
+                      }`}
+                    >
+                      {active ? (
+                        <motion.span
+                          layoutId={reduced ? undefined : "glassy-dock-active-bg"}
+                          transition={SPRING_SNAPPY}
+                          className="absolute inset-0 rounded-full bg-white shadow-[0_6px_20px_rgba(255,255,255,0.38)]"
+                        />
+                      ) : null}
+                      {active ? (
+                        <motion.span
+                          layoutId={reduced ? undefined : "glassy-pill-active"}
+                          transition={SPRING_SNAPPY}
+                          className="absolute -left-2 h-2 w-2 rounded-full bg-white shadow-[0_0_8px_#fff]"
+                        />
+                      ) : null}
+                      <span className="relative z-10">
+                        <NavIcon kind={item.icon} className="h-4 w-4" />
+                      </span>
+                    </Link>
+
+                    <AnimatePresence>
+                      {hoveredTip === item.id ? (
+                        <motion.span
+                          initial={{ opacity: 0, x: -8, scale: 0.92 }}
+                          animate={{ opacity: 1, x: 0, scale: 1 }}
+                          exit={{ opacity: 0, x: -6, scale: 0.92 }}
+                          transition={{ duration: 0.14 }}
+                          className="pointer-events-none absolute top-1/2 left-13 z-50 -translate-y-1/2 rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl"
+                        >
+                          {item.label}
+                        </motion.span>
+                      ) : null}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </nav>
+
+            <div className="my-1 h-px w-7 bg-white/15" />
+
+            <div className="flex flex-col items-center gap-2 py-0.5">
+              {quickSpots.map((spot) => (
+                <motion.div
+                  key={spot.key}
+                  onHoverStart={() => setHoveredTip(`spot-${spot.key}`)}
+                  onHoverEnd={() => setHoveredTip((cur) => (cur === `spot-${spot.key}` ? null : cur))}
+                  whileHover={reduced ? undefined : { scale: 1.32 }}
+                  whileTap={reduced ? undefined : { scale: 0.9 }}
+                  transition={SPRING_SNAPPY}
+                  className="relative"
+                >
+                  <Link
+                    href={spot.href}
+                    aria-label={spot.label}
+                    className="grid h-6 w-6 place-items-center rounded-full transition-colors hover:bg-white/15"
+                  >
+                    <span className={`h-2 w-2 rounded-full ${spot.dot}`} />
+                  </Link>
+                  <AnimatePresence>
+                    {hoveredTip === `spot-${spot.key}` ? (
+                      <motion.span
+                        initial={{ opacity: 0, x: -8, scale: 0.92 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: -6, scale: 0.92 }}
+                        transition={{ duration: 0.14 }}
+                        className="pointer-events-none absolute top-1/2 left-10 z-50 -translate-y-1/2 rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl"
+                      >
+                        {spot.label}
+                      </motion.span>
+                    ) : null}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="mt-1 flex flex-col items-center gap-2">
+              <motion.div
+                whileHover={reduced ? undefined : { scale: 1.12 }}
+                whileTap={reduced ? undefined : { scale: 0.92 }}
+                transition={SPRING_SNAPPY}
+              >
+                <Link
+                  href={authed ? "/billing" : "/#harga"}
+                  aria-label="Kuota & Upgrade"
+                  title={user ? `${user.planName} · ${quotaPct}% terpakai` : "Lihat paket harga"}
+                  className="relative grid h-9 w-9 place-items-center rounded-full bg-slate-950/50"
+                >
+                  <QuotaRing percent={quotaPct} size={34} />
+                  <span className="absolute text-[9px] font-bold text-amber-300">⚡</span>
+                </Link>
+              </motion.div>
+
+              <motion.div
+                whileHover={reduced ? undefined : { scale: 1.12 }}
+                whileTap={reduced ? undefined : { scale: 0.92 }}
+                transition={SPRING_SNAPPY}
+              >
+                <Link
+                  href={authed ? "/settings" : "/login"}
+                  aria-label={authed ? "Profil & Pengaturan" : "Masuk akun"}
+                  title={user ? user.name : "Masuk ke MyPRD"}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950 shadow-md"
+                >
+                  {userInitial}
+                </Link>
+              </motion.div>
+            </div>
+          </motion.aside>
+        ) : null}
+      </AnimatePresence>
+
+      {/* Tombol mengambang untuk layar < xl atau mode workspace (menggantikan tombol strip-3 header) */}
+      <AnimatePresence>
+        {!open ? (
+          <motion.button
+            key="glassy-mobile-orb"
             type="button"
             onClick={() => onOpenChange(true)}
-            aria-label="Perluas sidebar navigasi"
-            title="Perluas navigasi (⌘K)"
-            className="grid h-10 w-10 place-items-center rounded-full border border-white/25 bg-white/15 shadow-inner transition hover:scale-105 hover:bg-white/25"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 12 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 12 }}
+            whileHover={reduced ? undefined : { scale: 1.08 }}
+            whileTap={reduced ? undefined : { scale: 0.92 }}
+            transition={reduced ? { duration: 0.01 } : SPRING_SNAPPY}
+            aria-label="Buka navigasi MyPRD"
+            title="Buka navigasi (⌘K)"
+            className={`no-print glassy-sidebar-shell fixed bottom-5 left-4 z-40 flex h-11 items-center gap-2 rounded-full px-3.5 text-xs font-semibold text-white shadow-2xl ${
+              floatingDock ? "xl:hidden" : ""
+            }`}
           >
-            <Image src="/logo-mark.png" alt="MyPRD" width={36} height={30} className="h-6 w-auto" />
-          </button>
-
-          <button
-            type="button"
-            onClick={openWithSearch}
-            aria-label="Cari halaman atau project"
-            title="Cari (⌘K)"
-            className="grid h-9 w-9 place-items-center rounded-full border border-white/15 bg-white/10 text-slate-200 transition hover:bg-white/20 hover:text-white"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-3.5-3.5" />
-            </svg>
-          </button>
-
-          <nav aria-label="Menu utama" className="mt-1 flex flex-col items-center gap-1.5">
-            {items.map((item) => {
-              const active = isNavActive(pathname, item);
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  aria-label={item.label}
-                  title={item.label}
-                  className={`group relative grid h-10 w-10 place-items-center rounded-full transition ${
-                    active
-                      ? "bg-white text-slate-950 shadow-[0_6px_20px_rgba(255,255,255,0.35)]"
-                      : "text-slate-200/85 hover:bg-white/15 hover:text-white"
-                  }`}
-                >
-                  {active ? (
-                    <motion.span
-                      layoutId={reduced ? undefined : "glassy-pill-active"}
-                      className="absolute -left-2 h-2 w-2 rounded-full bg-white shadow-[0_0_8px_#fff]"
-                    />
-                  ) : null}
-                  <NavIcon kind={item.icon} className="h-4 w-4" />
-                  <span className="pointer-events-none absolute left-13 z-50 hidden rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl group-hover:block">
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="my-1 h-px w-7 bg-white/15" />
-
-          <div className="flex flex-col items-center gap-2 py-0.5">
-            {quickSpots.map((spot) => (
-              <Link
-                key={spot.key}
-                href={spot.href}
-                aria-label={spot.label}
-                title={spot.label}
-                className="group relative grid h-6 w-6 place-items-center rounded-full transition hover:bg-white/15"
-              >
-                <span className={`h-2 w-2 rounded-full ${spot.dot}`} />
-                <span className="pointer-events-none absolute left-10 z-50 hidden rounded-lg border border-white/20 bg-slate-950/95 px-2.5 py-1 text-[11px] font-medium whitespace-nowrap text-white shadow-xl group-hover:block">
-                  {spot.label}
-                </span>
-              </Link>
-            ))}
-          </div>
-
-          <div className="mt-1 flex flex-col items-center gap-2">
-            <Link
-              href={authed ? "/billing" : "/#harga"}
-              aria-label="Kuota & Upgrade"
-              title={user ? `${user.planName} · ${quotaPct}% terpakai` : "Lihat paket harga"}
-              className="relative grid h-9 w-9 place-items-center rounded-full bg-slate-950/50 transition hover:scale-105"
-            >
-              <QuotaRing percent={quotaPct} size={34} />
-              <span className="absolute text-[9px] font-bold text-amber-300">⚡</span>
-            </Link>
-
-            <Link
-              href={authed ? "/settings" : "/login"}
-              aria-label={authed ? "Profil & Pengaturan" : "Masuk akun"}
-              title={user ? user.name : "Masuk ke MyPRD"}
-              className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950 shadow-md transition hover:scale-105"
-            >
-              {userInitial}
-            </Link>
-          </div>
-        </aside>
-      ) : null}
+            <Image src="/logo-mark.png" alt="" width={24} height={20} className="h-4.5 w-auto" />
+            <span>Menu</span>
+          </motion.button>
+        ) : null}
+      </AnimatePresence>
 
       {/* Expanded Dual-Pane Curved Glassy Sidebar V10 */}
       <AnimatePresence>
@@ -377,10 +509,10 @@ export function GlassySidebar({
               role="dialog"
               aria-modal="true"
               aria-label="Sidebar navigasi MyPRD"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, x: -24, scale: 0.96 }}
+              initial={reduced ? { opacity: 0 } : { opacity: 0, x: -28, scale: 0.95 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, x: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, x: -24, scale: 0.96 }}
-              transition={reduced ? { duration: 0.01 } : { type: "spring", stiffness: 360, damping: 30 }}
+              transition={reduced ? { duration: 0.01 } : SPRING_PANEL}
               className="glassy-sidebar-shell relative z-10 ml-3 flex max-h-[calc(100dvh-28px)] w-[306px] max-w-[calc(100vw-24px)] overflow-hidden rounded-[28px]"
             >
               {/* Left Frosted Glass Pane */}
@@ -396,16 +528,19 @@ export function GlassySidebar({
                       <span className="block truncate text-[10px] text-sky-100/75">AI PRD Workspace</span>
                     </span>
                   </Link>
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => onOpenChange(false)}
+                    whileHover={reduced ? undefined : { scale: 1.1 }}
+                    whileTap={reduced ? undefined : { scale: 0.9 }}
+                    transition={SPRING_SNAPPY}
                     aria-label="Ciutkan navigasi"
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-white/20 bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
                   >
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
                       <path d="m15 18-6-6 6-6" />
                     </svg>
-                  </button>
+                  </motion.button>
                 </div>
 
                 {/* Live Search Pill */}
@@ -430,29 +565,41 @@ export function GlassySidebar({
                 {/* Scrollable Links & Recent Projects */}
                 <div className="mt-3.5 flex-1 space-y-4 overflow-x-clip overflow-y-auto pt-2">
                   <nav aria-label="Menu navigasi" className="space-y-1.5">
-                    {filteredItems.map((item) => {
+                    {filteredItems.map((item, idx) => {
                       const active = isNavActive(pathname, item);
                       return (
-                        <Link
+                        <motion.div
                           key={item.id}
-                          href={item.href}
-                          onClick={() => onOpenChange(false)}
-                          className={
-                            active
-                              ? "glassy-active-cutout flex items-center justify-between rounded-l-full rounded-r-none bg-white py-2.5 pr-4 pl-3.5 text-xs font-semibold text-slate-950 shadow-md"
-                              : "mr-3 flex items-center justify-between rounded-full border border-white/10 bg-white/[0.07] px-3.5 py-2.5 text-xs font-medium text-white/85 transition hover:border-white/20 hover:bg-white/[0.15] hover:text-white"
+                          initial={reduced ? undefined : { opacity: 0, x: -14 }}
+                          animate={reduced ? undefined : { opacity: 1, x: 0 }}
+                          whileHover={reduced ? undefined : { x: active ? 0 : 4 }}
+                          whileTap={reduced ? undefined : { scale: 0.98 }}
+                          transition={
+                            reduced
+                              ? { duration: 0.01 }
+                              : { delay: idx * 0.04, type: "spring", stiffness: 380, damping: 28 }
                           }
                         >
-                          <span className="flex min-w-0 items-center gap-2.5">
-                            <NavIcon kind={item.icon} className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{item.label}</span>
-                          </span>
-                          {item.badge && !active ? (
-                            <span className="rounded-full bg-[#35d6ff]/20 px-2 py-0.5 text-[10px] font-semibold text-[#7fe3ff]">
-                              {item.badge}
+                          <Link
+                            href={item.href}
+                            onClick={() => onOpenChange(false)}
+                            className={
+                              active
+                                ? "glassy-active-cutout flex items-center justify-between rounded-l-full rounded-r-none bg-white py-2.5 pr-4 pl-3.5 text-xs font-semibold text-slate-950 shadow-md"
+                                : "mr-3 flex items-center justify-between rounded-full border border-white/10 bg-white/[0.07] px-3.5 py-2.5 text-xs font-medium text-white/85 transition-colors hover:border-white/20 hover:bg-white/[0.15] hover:text-white"
+                            }
+                          >
+                            <span className="flex min-w-0 items-center gap-2.5">
+                              <NavIcon kind={item.icon} className="h-4 w-4 shrink-0" />
+                              <span className="truncate">{item.label}</span>
                             </span>
-                          ) : null}
-                        </Link>
+                            {item.badge && !active ? (
+                              <span className="rounded-full bg-[#35d6ff]/20 px-2 py-0.5 text-[10px] font-semibold text-[#7fe3ff]">
+                                {item.badge}
+                              </span>
+                            ) : null}
+                          </Link>
+                        </motion.div>
                       );
                     })}
                     {filteredItems.length === 0 ? (
@@ -470,7 +617,7 @@ export function GlassySidebar({
                         href={authed ? "/dashboard" : "/register"}
                         onClick={() => onOpenChange(false)}
                         aria-label={authed ? "Buat project baru" : "Mulai gratis"}
-                        className="grid h-5 w-5 place-items-center rounded-full border border-white/20 bg-white/10 text-xs text-white transition hover:bg-white/25"
+                        className="grid h-5 w-5 place-items-center rounded-full border border-white/20 bg-white/10 text-xs text-white transition hover:scale-110 hover:bg-white/25"
                       >
                         +
                       </Link>
@@ -479,20 +626,25 @@ export function GlassySidebar({
                       {authed ? (
                         filteredProjects.length > 0 ? (
                           filteredProjects.map((prj, idx) => (
-                            <Link
+                            <motion.div
                               key={prj.id}
-                              href={`/dashboard/${prj.id}`}
-                              onClick={() => onOpenChange(false)}
-                              className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs text-white/85 transition hover:bg-white/10 hover:text-white"
+                              whileHover={reduced ? undefined : { x: 3 }}
+                              transition={SPRING_SNAPPY}
                             >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLORS[idx % DOT_COLORS.length]}`} />
-                                <span className="truncate">{prj.title}</span>
-                              </span>
-                              <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/75">
-                                {prj.status === "prd_ready" ? "PRD" : "Chat"}
-                              </span>
-                            </Link>
+                              <Link
+                                href={`/dashboard/${prj.id}`}
+                                onClick={() => onOpenChange(false)}
+                                className="flex items-center justify-between gap-2 rounded-xl px-2.5 py-1.5 text-xs text-white/85 transition hover:bg-white/10 hover:text-white"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLORS[idx % DOT_COLORS.length]}`} />
+                                  <span className="truncate">{prj.title}</span>
+                                </span>
+                                <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/75">
+                                  {prj.status === "prd_ready" ? "PRD" : "Chat"}
+                                </span>
+                              </Link>
+                            </motion.div>
                           ))
                         ) : (
                           <Link
@@ -519,7 +671,7 @@ export function GlassySidebar({
                             className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-xs text-white/85 transition hover:bg-white/10"
                           >
                             <span className={`h-2 w-2 rounded-full ${DOT_COLORS[1]}`} />
-                            <span className="truncate">FAQ & Enkripsi</span>
+                            <span className="truncate">FAQ &amp; Enkripsi</span>
                           </Link>
                         </>
                       )}
@@ -597,42 +749,50 @@ export function GlassySidebar({
               {/* Right Slim White Action Rail */}
               <div className="flex w-[46px] shrink-0 flex-col items-center justify-between rounded-r-[27px] bg-white px-1.5 py-3.5 text-slate-600 shadow-[-6px_0_24px_rgba(0,0,0,0.18)]">
                 <div className="flex flex-col items-center gap-2.5">
-                  <Link
-                    href={authed ? "/dashboard" : "/register"}
-                    onClick={() => onOpenChange(false)}
-                    aria-label={authed ? "Buka Dashboard" : "Mulai Gratis"}
-                    title={authed ? "Dashboard" : "Mulai Gratis"}
-                    className="grid h-8 w-8 place-items-center rounded-xl bg-linear-to-b from-[#4f7cff] to-[#2563eb] text-white shadow-md transition hover:scale-105"
-                  >
-                    <IconSparkles className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href={authed ? "/billing" : "/#harga"}
-                    onClick={() => onOpenChange(false)}
-                    aria-label="Pembayaran & Paket"
-                    title="Billing & QRIS"
-                    className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    <IconBolt className="h-4 w-4" />
-                  </Link>
-                  <Link
-                    href={authed ? "/settings" : "/login"}
-                    onClick={() => onOpenChange(false)}
-                    aria-label={authed ? "Pengaturan" : "Masuk"}
-                    title={authed ? "Pengaturan" : "Masuk"}
-                    className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    {authed ? <IconSettings className="h-4 w-4" /> : <IconUser className="h-4 w-4" />}
-                  </Link>
-                  <Link
-                    href="/komunitas"
-                    onClick={() => onOpenChange(false)}
-                    aria-label="Keamanan & Komunitas"
-                    title="Komunitas & Lencana"
-                    className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  >
-                    <IconShield className="h-4 w-4" />
-                  </Link>
+                  <motion.div whileHover={reduced ? undefined : { scale: 1.14, y: -1 }} whileTap={reduced ? undefined : { scale: 0.92 }} transition={SPRING_SNAPPY}>
+                    <Link
+                      href={authed ? "/dashboard" : "/register"}
+                      onClick={() => onOpenChange(false)}
+                      aria-label={authed ? "Buka Dashboard" : "Mulai Gratis"}
+                      title={authed ? "Dashboard" : "Mulai Gratis"}
+                      className="grid h-8 w-8 place-items-center rounded-xl bg-linear-to-b from-[#4f7cff] to-[#2563eb] text-white shadow-md"
+                    >
+                      <IconSparkles className="h-4 w-4" />
+                    </Link>
+                  </motion.div>
+                  <motion.div whileHover={reduced ? undefined : { scale: 1.14, y: -1 }} whileTap={reduced ? undefined : { scale: 0.92 }} transition={SPRING_SNAPPY}>
+                    <Link
+                      href={authed ? "/billing" : "/#harga"}
+                      onClick={() => onOpenChange(false)}
+                      aria-label="Pembayaran & Paket"
+                      title="Billing & QRIS"
+                      className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <IconBolt className="h-4 w-4" />
+                    </Link>
+                  </motion.div>
+                  <motion.div whileHover={reduced ? undefined : { scale: 1.14, y: -1 }} whileTap={reduced ? undefined : { scale: 0.92 }} transition={SPRING_SNAPPY}>
+                    <Link
+                      href={authed ? "/settings" : "/login"}
+                      onClick={() => onOpenChange(false)}
+                      aria-label={authed ? "Pengaturan" : "Masuk"}
+                      title={authed ? "Pengaturan" : "Masuk"}
+                      className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      {authed ? <IconSettings className="h-4 w-4" /> : <IconUser className="h-4 w-4" />}
+                    </Link>
+                  </motion.div>
+                  <motion.div whileHover={reduced ? undefined : { scale: 1.14, y: -1 }} whileTap={reduced ? undefined : { scale: 0.92 }} transition={SPRING_SNAPPY}>
+                    <Link
+                      href="/komunitas"
+                      onClick={() => onOpenChange(false)}
+                      aria-label="Keamanan & Komunitas"
+                      title="Komunitas & Lencana"
+                      className="grid h-8 w-8 place-items-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                    >
+                      <IconShield className="h-4 w-4" />
+                    </Link>
+                  </motion.div>
                 </div>
 
                 <span className="[writing-mode:vertical-rl] rotate-180 text-[10px] font-bold tracking-[0.22em] text-slate-400 select-none">

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { IconLayers, IconSettings, IconUser } from "./icons";
 import { GlassySidebar } from "./GlassySidebar";
 import { CountUp } from "./motion/CountUp";
@@ -23,7 +23,6 @@ export function SiteHeader({
 }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -43,20 +42,6 @@ export function SiteHeader({
       >
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
           <div className="flex items-center gap-2.5">
-            <button
-              ref={menuBtnRef}
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Buka menu"
-              aria-expanded={menuOpen}
-              aria-controls="nav-drawer"
-              className="grid h-9 w-9 place-items-center rounded-lg border border-slate-800/80 bg-slate-900/50 text-slate-300 transition hover:border-[#35d6ff]/50 hover:text-white"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-            </button>
-
             <Link href="/" className="group flex items-center gap-2.5 font-semibold tracking-tight">
               <Image
                 src="/logo-mark.png"
@@ -67,15 +52,10 @@ export function SiteHeader({
                 priority
                 className="float-y logo-glow h-9 w-auto rounded-lg transition-transform duration-300 group-hover:scale-105"
               />
-              <span className="flex flex-col leading-none">
-                <span className="text-base font-bold tracking-tight whitespace-nowrap sm:text-lg">
-                  <span className="text-white">My</span>
-                  <span className="bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] bg-clip-text text-transparent">
-                    PRD
-                  </span>
-                </span>
-                <span className="mt-0.5 hidden text-[10px] font-normal whitespace-nowrap text-slate-400 sm:block">
-                  ngoding pake AI
+              <span className="text-base font-bold tracking-tight whitespace-nowrap sm:text-lg">
+                <span className="text-white">My</span>
+                <span className="bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] bg-clip-text text-transparent">
+                  PRD
                 </span>
               </span>
             </Link>
@@ -153,7 +133,6 @@ export function SiteHeader({
         authed={authed}
         open={menuOpen}
         onOpenChange={setMenuOpen}
-        triggerRef={menuBtnRef}
         floatingDock={floatingDock}
       />
     </>
@@ -188,7 +167,7 @@ export function SiteFooter() {
             Ketentuan
           </Link>
           <a
-            href="https://discord.gg/w3pn2Ey3P"
+            href="https://discord.gg/yVQWsrQDbM"
             target="_blank"
             rel="noreferrer"
             className="transition hover:text-[#35d6ff]"

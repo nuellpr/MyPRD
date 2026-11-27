@@ -69,7 +69,7 @@ export function DashboardStats({
         <p className="text-xs uppercase tracking-wide text-slate-500">Komunitas</p>
         <p className="mt-2 text-sm text-slate-300">Diskusi, template, dan coaching bareng builder lain.</p>
         <a
-          href="https://discord.gg/w3pn2Ey3P"
+          href="https://discord.gg/yVQWsrQDbM"
           target="_blank"
           rel="noreferrer"
           className="mt-3 inline-block text-sm text-[#35d6ff] hover:underline"

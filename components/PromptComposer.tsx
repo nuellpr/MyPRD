@@ -39,7 +39,6 @@ const SUGGESTION_CHIPS = [
 
 export function PromptComposer({
   authed,
-  providers,
   defaultModel = "mock/default",
   variant,
 }: {
@@ -53,7 +52,7 @@ export function PromptComposer({
   const reduced = useReducedMotion();
 
   const [idea, setIdea] = useState("");
-  const [modelId, setModelId] = useState(defaultModel);
+  const modelId = defaultModel;
   const [language, setLanguage] = useState<"id" | "en">("id");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
   const [referenceNote, setReferenceNote] = useState("");
@@ -255,20 +254,6 @@ export function PromptComposer({
             Plan
           </span>
         </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected="false"
-          aria-disabled="true"
-          disabled
-          className="flex cursor-not-allowed items-center gap-1.5 rounded-t-xl border border-b-0 border-slate-800/60 bg-slate-900/35 px-3.5 py-2 text-xs font-medium text-slate-400"
-        >
-          <span>Desain</span>
-          <span className="rounded-md border border-slate-700/80 bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-400">
-            Segera
-          </span>
-        </button>
       </div>
 
       {/* Main Composer Card */}
@@ -411,25 +396,6 @@ export function PromptComposer({
               </span>
               <span>Referensi</span>
             </button>
-
-            {variant === "dashboard" && providers && providers.length > 0 ? (
-              <select
-                aria-label="Model AI"
-                value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                className="max-w-[190px] truncate rounded-full border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-200 outline-none transition hover:border-slate-500 focus:border-[#35d6ff]"
-              >
-                {providers.map((provider) => (
-                  <optgroup key={provider.id} label={provider.label}>
-                    {provider.models.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.model}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            ) : null}
 
             <button
               type="button"

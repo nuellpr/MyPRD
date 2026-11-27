@@ -49,7 +49,7 @@ export function getProviders(): ProviderConfig[] {
       label: "BangunWeb AI Router",
       baseUrl: (process.env.BANGUNWEB_BASE_URL ?? "https://router.bangunweb.com/v1").replace(/\/+$/, ""),
       apiKey: readKey("BANGUNWEB_API_KEY", "BWR_API_KEY"),
-      models: (process.env.BANGUNWEB_MODELS ?? "bw-swift,deepseek-v4.1-flash,gpt-5.4-mini,gpt-6.2-astra,gpt-6.2-sol")
+      models: (process.env.BANGUNWEB_MODELS ?? "gpt-6.2-astra")
         .split(",")
         .map((m) => m.trim())
         .filter(Boolean),

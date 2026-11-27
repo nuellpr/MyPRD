@@ -6,7 +6,6 @@ import { SettingsForm } from "@/components/SettingsForm";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { currentUser } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/env";
-import { modelOptionsFor } from "@/lib/model-options";
 import { getPlan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +14,6 @@ export default async function SettingsPage() {
   const user = await currentUser();
   if (!user) redirect("/login?next=/settings");
 
-  const { providers, initialModel } = modelOptionsFor(user);
   const plan = getPlan(user.plan);
   const admin = isAdminEmail(user.email);
   const initial = (user.name || user.email).trim().charAt(0).toUpperCase();
@@ -27,7 +25,7 @@ export default async function SettingsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#35d6ff]">Akun</p>
           <WordReveal text="Profil & pengaturan" className="mt-2 text-2xl font-semibold text-white sm:text-3xl" />
-          <p className="mt-2 text-sm text-slate-400">Atur detail profil, password, dan model AI untuk project baru.</p>
+          <p className="mt-2 text-sm text-slate-400">Atur detail profil dan keamanan password akunmu.</p>
         </div>
 
         <Reveal delay={0.04} className="mt-8">
@@ -65,8 +63,6 @@ export default async function SettingsPage() {
             initialPhone={user.phone}
             initialBio={user.bio}
             hasPassword={Boolean(user.password_hash)}
-            providers={providers}
-            defaultModel={initialModel}
           />
         </div>
       </main>
