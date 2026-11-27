@@ -1,7 +1,7 @@
 import { findUserById } from "@/lib/auth";
 import { mapMidtransStatus, mayarPaymentRequest, MAYAR_ORDER_KEY, verifyMidtransSignature } from "@/lib/billing";
 import { sendPaymentSuccessEmail } from "@/lib/billing-email";
-import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
+import { errorToResponse, jsonError, jsonOk, publicUrl, readJson } from "@/lib/http";
 import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
 
 /**
@@ -20,7 +20,7 @@ import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
 export async function POST(request: Request) {
   try {
     const body = await readJson<Record<string, unknown>>(request);
-    const dashboardUrl = new URL("/dashboard", request.url).toString();
+    const dashboardUrl = publicUrl(request, "/dashboard");
     if (typeof body.event === "string" && body.data && typeof body.data === "object") {
       return await handleMayar(body.event, body.data as Record<string, unknown>, dashboardUrl);
     }

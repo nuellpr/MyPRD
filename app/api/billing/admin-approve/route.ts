@@ -1,7 +1,7 @@
 import { findUserById, requireUser } from "@/lib/auth";
 import { sendPaymentRejectedEmail, sendPaymentSuccessEmail } from "@/lib/billing-email";
 import { isAdminEmail } from "@/lib/env";
-import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
+import { errorToResponse, jsonError, jsonOk, publicUrl, readJson } from "@/lib/http";
 import { getOrderById, markOrderPaid, setOrderStatus } from "@/lib/repo";
 
 /**
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
           orderId: order.id,
           planId: order.plan,
           amountIdr: order.amountIdr,
-          billingUrl: new URL("/billing", request.url).toString(),
+          billingUrl: publicUrl(request, "/billing"),
         });
       }
       return jsonOk({ order: updated });
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
         planId: order.plan,
         amountIdr: order.amountIdr,
         provider: order.provider,
-        dashboardUrl: new URL("/dashboard", request.url).toString(),
+        dashboardUrl: publicUrl(request, "/dashboard"),
       });
     }
 

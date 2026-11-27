@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { sendAdminQrisConfirmEmail, sendPaymentSubmittedEmail } from "@/lib/billing-email";
 import { adminEmails } from "@/lib/env";
-import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
+import { errorToResponse, jsonError, jsonOk, publicUrl, readJson } from "@/lib/http";
 import { parseQrisOrderRef } from "@/lib/qris";
 import { getOrder, setOrderProviderRef } from "@/lib/repo";
 import { sanitizeUserText } from "@/lib/safety";
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     };
     setOrderProviderRef(order.id, JSON.stringify(nextMeta));
 
-    const billingUrl = new URL("/billing", request.url).toString();
+    const billingUrl = publicUrl(request, "/billing");
     const admins = adminEmails();
     const results = await Promise.allSettled([
       sendPaymentSubmittedEmail({

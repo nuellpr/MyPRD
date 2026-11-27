@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { mayarPaymentRequest } from "@/lib/billing";
 import { sendPaymentSuccessEmail } from "@/lib/billing-email";
-import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
+import { errorToResponse, jsonError, jsonOk, publicUrl, readJson } from "@/lib/http";
 import { getOrder, markOrderPaid } from "@/lib/repo";
 
 /**
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
           planId: order.plan,
           amountIdr: order.amountIdr,
           provider: order.provider,
-          dashboardUrl: new URL("/dashboard", request.url).toString(),
+          dashboardUrl: publicUrl(request, "/dashboard"),
         });
       }
     }

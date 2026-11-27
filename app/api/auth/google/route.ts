@@ -1,4 +1,4 @@
-import { jsonError } from "@/lib/http";
+import { jsonError, publicOrigin } from "@/lib/http";
 import { googleAuthUrl, googleConfigured, googleRedirectUri, signOAuthState } from "@/lib/oauth";
 import { AUTH_RATE_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -17,7 +17,8 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
+  const origin = publicOrigin(request);
   const next = url.searchParams.get("next") ?? "/dashboard";
-  const redirectUri = googleRedirectUri(url.origin);
+  const redirectUri = googleRedirectUri(origin);
   return Response.redirect(googleAuthUrl(signOAuthState(next), redirectUri), 302);
 }

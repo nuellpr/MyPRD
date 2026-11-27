@@ -8,7 +8,7 @@ import {
   midtransClientKey,
 } from "@/lib/billing";
 import { sendOrderCreatedEmail } from "@/lib/billing-email";
-import { errorToResponse, jsonOk, readJson } from "@/lib/http";
+import { errorToResponse, jsonOk, publicUrl, readJson } from "@/lib/http";
 import {
   createDynamicQris,
   extractQrisMerchant,
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const body = await readJson<{ plan?: string }>(request);
     const plan = checkoutPlan(String(body.plan ?? ""));
     const provider = billingProvider();
-    const billingUrl = new URL("/billing", request.url).toString();
+    const billingUrl = publicUrl(request, "/billing");
 
     if (provider === "qris") {
       const staticPayload = qrisStaticPayload();

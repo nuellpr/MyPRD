@@ -1,6 +1,6 @@
 import { findUserByEmail, setSessionCookie } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import { errorToResponse } from "@/lib/http";
+import { errorToResponse, publicOrigin } from "@/lib/http";
 import { issueOtp } from "@/lib/otp";
 import {
   OAuthError,
@@ -15,14 +15,15 @@ import { findOrCreateOAuthUser } from "@/lib/repo";
 /** Callback Google: tukar code → profil. Akun baru wajib verifikasi OTP dulu. */
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const fail = () => Response.redirect(`${url.origin}/login?oauth=gagal`, 302);
+  const origin = publicOrigin(request);
+  const fail = () => Response.redirect(`${origin}/login?oauth=gagal`, 302);
   try {
     if (!googleConfigured() || url.searchParams.get("error")) return fail();
     const verified = verifyOAuthState(url.searchParams.get("state") ?? "");
     const code = url.searchParams.get("code");
     if (!code || !verified) return fail();
 
-    const redirectUri = googleRedirectUri(url.origin);
+    const redirectUri = googleRedirectUri(origin);
     const accessToken = await exchangeGoogleCode(code, redirectUri);
     const profile = await fetchGoogleProfile(accessToken);
     const isNew = !findUserByEmail(profile.email);
@@ -37,11 +38,11 @@ export async function GET(request: Request) {
       });
       const params = new URLSearchParams({ email: user.email, purpose: "google" });
       if (process.env.NODE_ENV !== "production" && !process.env.RESEND_API_KEY) params.set("devCode", otp);
-      return Response.redirect(`${url.origin}/verifikasi-otp?${params}`, 302);
+      return Response.redirect(`${origin}/verifikasi-otp?${params}`, 302);
     }
 
     await setSessionCookie(user.id);
-    return Response.redirect(`${url.origin}${verified.next}`, 302);
+    return Response.redirect(`${origin}${verified.next}`, 302);
   } catch (error) {
     // Kegagalan OAuth (user batal, code basi, dsb.) → kembali ke login,
     // bukan halaman JSON mentah.
