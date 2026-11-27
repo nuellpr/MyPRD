@@ -25,9 +25,11 @@ interface RecentProject {
 interface SidebarUser {
   name: string;
   email: string;
+  avatarUrl: string;
   planName: string;
   quotaUsed: number;
   quotaLimit: number;
+  quotaUnlimited: boolean;
 }
 
 const DOT_COLORS = [
@@ -170,15 +172,17 @@ export function GlassySidebar({
     ]).then(([meRes, prjRes]) => {
       if (cancelled) return;
       if (meRes.status === "fulfilled" && meRes.value?.user) {
-        const u = meRes.value.user as { name?: string; email?: string; plan?: string };
-        const q = meRes.value.quota as { used?: number; limit?: number } | null;
+        const u = meRes.value.user as { name?: string; email?: string; plan?: string; avatarUrl?: string };
+        const q = meRes.value.quota as { used?: number; limit?: number; unlimited?: boolean } | null;
         const planRaw = String(u.plan ?? "free");
         setUser({
           name: String(u.name || u.email || "Builder"),
           email: String(u.email || ""),
+          avatarUrl: String(u.avatarUrl || ""),
           planName: planRaw.charAt(0).toUpperCase() + planRaw.slice(1),
           quotaUsed: Number(q?.used ?? 0),
           quotaLimit: Math.max(1, Number(q?.limit ?? 5)),
+          quotaUnlimited: Boolean(q?.unlimited),
         });
       }
       if (prjRes.status === "fulfilled" && Array.isArray(prjRes.value?.projects)) {
@@ -237,7 +241,11 @@ export function GlassySidebar({
 
   const activeItem = items.find((item) => isNavActive(pathname, item));
   const railTitle = activeItem?.sectionLabel ?? sectionLabelForPath(pathname);
-  const quotaPct = user ? Math.round((user.quotaUsed / user.quotaLimit) * 100) : 25;
+  const quotaPct = user
+    ? user.quotaUnlimited
+      ? 100
+      : Math.round((user.quotaUsed / user.quotaLimit) * 100)
+    : 25;
   const userInitial = (user?.name || user?.email || (authed ? "M" : "G")).trim().charAt(0).toUpperCase();
 
   const quickSpots =
@@ -454,9 +462,20 @@ export function GlassySidebar({
                   href={authed ? "/settings" : "/login"}
                   aria-label={authed ? "Profil & Pengaturan" : "Masuk akun"}
                   title={user ? user.name : "Masuk ke MyPRD"}
-                  className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950 shadow-md"
+                  className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950 shadow-md"
                 >
-                  {userInitial}
+                  {user?.avatarUrl ? (
+                    <Image
+                      src={user.avatarUrl}
+                      alt={user.name}
+                      width={36}
+                      height={36}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    userInitial
+                  )}
                 </Link>
               </motion.div>
             </div>
@@ -692,7 +711,11 @@ export function GlassySidebar({
                           {user ? `Paket ${user.planName}` : "Gratis dicoba"}
                         </p>
                         <p className="truncate text-[10px] text-white/65">
-                          {user ? `${user.quotaUsed}/${user.quotaLimit} PRD dipakai` : "QRIS & multi-AI"}
+                          {user
+                            ? user.quotaUnlimited
+                              ? `${user.quotaUsed} PRD · Tak terbatas`
+                              : `${user.quotaUsed}/${user.quotaLimit} PRD dipakai`
+                            : "QRIS & multi-AI"}
                         </p>
                       </div>
                     </div>
@@ -712,8 +735,19 @@ export function GlassySidebar({
                       onClick={() => onOpenChange(false)}
                       className="flex items-center gap-2.5 rounded-2xl px-1.5 py-1 transition hover:bg-white/10"
                     >
-                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950">
-                        {userInitial}
+                      <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-linear-to-br from-amber-300 via-orange-400 to-rose-400 text-xs font-bold text-slate-950">
+                        {user?.avatarUrl ? (
+                          <Image
+                            src={user.avatarUrl}
+                            alt={user.name}
+                            width={32}
+                            height={32}
+                            unoptimized
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          userInitial
+                        )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-semibold text-white">

@@ -10,10 +10,21 @@ import { cookies } from "next/headers";
 import { AuthError } from "./auth-error.ts";
 import { getDb, type UserRow } from "./db.ts";
 import { createSession, getActiveSession, revokeSession } from "./repo.ts";
-import { hashPassword, newId, signSession, verifyPassword, verifySession } from "./crypto.ts";
+import {
+  hashPassword,
+  newId,
+  signSession,
+  signTwoFactorToken,
+  verifyPassword,
+  verifySession,
+  verifyTwoFactorToken,
+  type Pending2faPayload,
+} from "./crypto.ts";
 
 export const SESSION_COOKIE = "myprd_session";
+export const PENDING_2FA_COOKIE = "myprd_2fa_pending";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 hari
+const PENDING_2FA_TTL_MS = 1000 * 60 * 10; // 10 menit
 
 export interface PublicUser {
   id: string;
@@ -23,6 +34,8 @@ export interface PublicUser {
   defaultModelId: string;
   phone: string;
   bio: string;
+  avatarUrl: string;
+  twoFactorEnabled: boolean;
   createdAt: number;
 }
 
@@ -35,6 +48,8 @@ export function toPublicUser(row: UserRow): PublicUser {
     defaultModelId: row.default_model_id,
     phone: row.phone,
     bio: row.bio,
+    avatarUrl: row.avatar_url ?? "",
+    twoFactorEnabled: row.two_factor_enabled === 1,
     createdAt: row.created_at,
   };
 }
@@ -73,33 +88,55 @@ export function createUser({ email, password, name }: CreateUserInput): UserRow 
     default_model_id: "",
     phone: "",
     bio: "",
+    avatar_url: "",
+    two_factor_enabled: 0,
     email_verified: 0,
     created_at: Date.now(),
   };
   getDb()
     .prepare(
-      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, avatar_url, two_factor_enabled, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .run(row.id, row.email, row.name, row.password_hash, row.plan, row.default_model_id, row.email_verified, row.created_at);
+    .run(
+      row.id,
+      row.email,
+      row.name,
+      row.password_hash,
+      row.plan,
+      row.default_model_id,
+      row.avatar_url,
+      row.two_factor_enabled,
+      row.email_verified,
+      row.created_at,
+    );
   return row;
 }
 
-/** Simpan perubahan profil + preferensi model AI user. */
+/** Simpan perubahan profil + foto profil + preferensi model AI user. */
 export function updateUserProfile(
   userId: string,
-  patch: { name?: string; defaultModelId?: string; phone?: string; bio?: string },
+  patch: { name?: string; defaultModelId?: string; phone?: string; bio?: string; avatarUrl?: string },
 ): UserRow | null {
   const current = findUserById(userId);
   if (!current) return null;
   getDb()
-    .prepare("UPDATE users SET name = ?, default_model_id = ?, phone = ?, bio = ? WHERE id = ?")
+    .prepare("UPDATE users SET name = ?, default_model_id = ?, phone = ?, bio = ?, avatar_url = ? WHERE id = ?")
     .run(
       patch.name ?? current.name,
       patch.defaultModelId ?? current.default_model_id,
       patch.phone ?? current.phone,
       patch.bio ?? current.bio,
+      patch.avatarUrl ?? current.avatar_url ?? "",
       userId,
     );
+  return findUserById(userId) ?? null;
+}
+
+/** Aktifkan atau nonaktifkan 2FA via OTP email pada akun user. */
+export function setTwoFactorEnabled(userId: string, enabled: boolean): UserRow | null {
+  const current = findUserById(userId);
+  if (!current) return null;
+  getDb().prepare("UPDATE users SET two_factor_enabled = ? WHERE id = ?").run(enabled ? 1 : 0, userId);
   return findUserById(userId) ?? null;
 }
 
@@ -144,6 +181,29 @@ export async function setSessionCookie(userId: string): Promise<void> {
     path: "/",
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
+}
+
+export async function setPending2faCookie(userId: string, email: string): Promise<void> {
+  const store = await cookies();
+  const token = signTwoFactorToken({ userId, email, exp: Date.now() + PENDING_2FA_TTL_MS });
+  store.set(PENDING_2FA_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: Math.floor(PENDING_2FA_TTL_MS / 1000),
+  });
+}
+
+export async function readPending2faCookie(): Promise<Pending2faPayload | null> {
+  const store = await cookies();
+  const token = store.get(PENDING_2FA_COOKIE)?.value;
+  return token ? verifyTwoFactorToken(token) : null;
+}
+
+export async function clearPending2faCookie(): Promise<void> {
+  const store = await cookies();
+  store.delete(PENDING_2FA_COOKIE);
 }
 
 export async function clearSessionCookie(): Promise<void> {

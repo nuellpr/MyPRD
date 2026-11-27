@@ -36,6 +36,7 @@ export interface WorkspaceQuota {
   used: number;
   limit: number;
   remaining: number;
+  unlimited?: boolean;
   allowed: boolean;
   resetsAt: number;
 }

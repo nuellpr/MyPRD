@@ -8,8 +8,11 @@ const { PLANS, getPlan, isPlanUpgrade, evaluateQuota, estimateCostUsd, estimateT
 test("PLANS punya minimal 3 tier sesuai PRD (free/starter/pro)", () => {
   assert.deepEqual(Object.keys(PLANS).sort(), ["free", "pro", "starter"]);
   assert.equal(PLANS.free.priceIdr, 0);
-  assert.ok(PLANS.starter.priceIdr > 0);
-  assert.ok(PLANS.pro.priceIdr > PLANS.starter.priceIdr);
+  assert.equal(PLANS.starter.priceIdr, 49000);
+  assert.equal(PLANS.starter.monthlyQuota, 25);
+  assert.equal(PLANS.starter.unlimited, false);
+  assert.equal(PLANS.pro.priceIdr, 149000);
+  assert.equal(PLANS.pro.unlimited, true);
 });
 
 test("kuota free tier mengikuti env FREE_MONTHLY_QUOTA", () => {
@@ -43,6 +46,7 @@ test("evaluateQuota menghitung sisa kuota dan resetsAt awal bulan berikutnya", (
   assert.equal(state.used, 2);
   assert.equal(state.limit, 5);
   assert.equal(state.remaining, 3);
+  assert.equal(state.unlimited, false);
   assert.equal(state.allowed, true);
   const resets = new Date(state.resetsAt);
   assert.equal(resets.getFullYear(), 2026);
@@ -50,11 +54,15 @@ test("evaluateQuota menghitung sisa kuota dan resetsAt awal bulan berikutnya", (
   assert.equal(resets.getDate(), 1);
 });
 
-test("evaluateQuota memblokir saat kuota habis / terlampaui", () => {
+test("evaluateQuota memblokir saat kuota habis dan mengizinkan tak terbatas untuk Pro", () => {
   assert.equal(evaluateQuota("free", 5).allowed, false);
   assert.equal(evaluateQuota("free", 5).remaining, 0);
   assert.equal(evaluateQuota("free", 99).remaining, 0);
-  assert.equal(evaluateQuota("pro", 999).allowed, true);
+  assert.equal(evaluateQuota("starter", 24).allowed, true);
+  assert.equal(evaluateQuota("starter", 25).allowed, false);
+  const proState = evaluateQuota("pro", 99999);
+  assert.equal(proState.unlimited, true);
+  assert.equal(proState.allowed, true);
 });
 
 test("estimateCostUsd menghitung biaya per 1 juta token", () => {

@@ -3,12 +3,21 @@ import { defaultModelId, findProvider, isAdminEmail, parseModelId } from "@/lib/
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { sanitizeUserText } from "@/lib/safety";
 
-/** Simpan nama profil dan model AI default user. */
+const AVATAR_DATA_URL_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+const MAX_AVATAR_CHARS = 200_000;
+
+/** Simpan profil, foto profil, dan preferensi user. */
 export async function PATCH(request: Request) {
   try {
     const user = await requireUser();
-    const body = await readJson<{ name?: unknown; defaultModelId?: unknown; phone?: unknown; bio?: unknown }>(request);
-    const patch: { name?: string; defaultModelId?: string; phone?: string; bio?: string } = {};
+    const body = await readJson<{
+      name?: unknown;
+      defaultModelId?: unknown;
+      phone?: unknown;
+      bio?: unknown;
+      avatarUrl?: unknown;
+    }>(request);
+    const patch: { name?: string; defaultModelId?: string; phone?: string; bio?: string; avatarUrl?: string } = {};
 
     if (body.name !== undefined) {
       const name = sanitizeUserText(body.name, 80);
@@ -28,6 +37,17 @@ export async function PATCH(request: Request) {
 
     if (body.phone !== undefined) patch.phone = sanitizeUserText(body.phone, 40);
     if (body.bio !== undefined) patch.bio = sanitizeUserText(body.bio, 300);
+
+    if (body.avatarUrl !== undefined) {
+      if (typeof body.avatarUrl !== "string") {
+        return jsonError("Format foto profil tidak valid.", 400);
+      }
+      const trimmed = body.avatarUrl.trim();
+      if (trimmed !== "" && (trimmed.length > MAX_AVATAR_CHARS || !AVATAR_DATA_URL_RE.test(trimmed))) {
+        return jsonError("Foto harus berformat PNG, JPG, atau WebP (maks. ~150 KB).", 400);
+      }
+      patch.avatarUrl = trimmed;
+    }
 
     if (Object.keys(patch).length === 0) {
       return jsonError("Tidak ada perubahan untuk disimpan.", 400);

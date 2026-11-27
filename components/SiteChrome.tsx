@@ -174,9 +174,6 @@ export function SiteFooter() {
           >
             Discord
           </a>
-          <a href="https://youtube.com" target="_blank" rel="noreferrer" className="transition hover:text-white">
-            YouTube
-          </a>
         </p>
       </div>
     </footer>

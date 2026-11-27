@@ -1,7 +1,8 @@
 import { createUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { sendEmail } from "@/lib/email";
-import { issueOtp } from "@/lib/otp";
+import { assertNotLocked } from "@/lib/lockout";
+import { issueOtp, otpLockoutKey } from "@/lib/otp";
 import { errorToResponse, jsonOk, readJson } from "@/lib/http";
 import { AUTH_RATE_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 import { sanitizeUserText } from "@/lib/safety";
@@ -21,8 +22,13 @@ export async function POST(request: Request) {
     }
 
     const body = await readJson<{ email?: string; password?: string; name?: string }>(request);
+    const email = String(body.email ?? "").trim().toLowerCase();
+    if (email) {
+      assertNotLocked(otpLockoutKey(email, "register"), "Pendaftaran");
+    }
+
     const user = createUser({
-      email: String(body.email ?? ""),
+      email,
       password: String(body.password ?? ""),
       name: sanitizeUserText(body.name, 80),
     });

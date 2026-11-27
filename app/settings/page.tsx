@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { IconArrowRight, IconShield } from "@/components/icons";
@@ -25,13 +26,26 @@ export default async function SettingsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#35d6ff]">Akun</p>
           <WordReveal text="Profil & pengaturan" className="mt-2 text-2xl font-semibold text-white sm:text-3xl" />
-          <p className="mt-2 text-sm text-slate-400">Atur detail profil dan keamanan password akunmu.</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Atur foto profil, keamanan 2FA, password, atau penghapusan akunmu.
+          </p>
         </div>
 
         <Reveal delay={0.04} className="mt-8">
           <section className="flex flex-col gap-4 rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6 sm:flex-row sm:items-center">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] text-xl font-bold text-slate-950">
-              {initial}
+            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-linear-to-br from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] text-xl font-bold text-slate-950">
+              {user.avatar_url ? (
+                <Image
+                  src={user.avatar_url}
+                  alt={user.name || user.email}
+                  width={56}
+                  height={56}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initial
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -39,6 +53,11 @@ export default async function SettingsPage() {
                 <span className="rounded-full border border-slate-700 bg-slate-950 px-2.5 py-0.5 text-xs text-slate-300">
                   {plan.name}
                 </span>
+                {user.two_factor_enabled === 1 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-0.5 text-xs text-emerald-200">
+                    2FA Aktif
+                  </span>
+                ) : null}
                 {admin ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-0.5 text-xs text-violet-200">
                     <IconShield className="h-3.5 w-3.5" /> Admin
@@ -62,6 +81,8 @@ export default async function SettingsPage() {
             email={user.email}
             initialPhone={user.phone}
             initialBio={user.bio}
+            initialAvatarUrl={user.avatar_url}
+            initialTwoFactorEnabled={user.two_factor_enabled === 1}
             hasPassword={Boolean(user.password_hash)}
           />
         </div>

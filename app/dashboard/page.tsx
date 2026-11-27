@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -30,7 +31,11 @@ export default async function DashboardPage() {
   const quota = getQuotaState(user.id, user.plan);
   const projects = listProjects(user.id);
   const { providers, initialModel } = modelOptionsFor(user);
-  const quotaPercent = quota.limit > 0 ? Math.min(100, Math.round((quota.used / quota.limit) * 100)) : 0;
+  const quotaPercent = quota.unlimited
+    ? 100
+    : quota.limit > 0
+      ? Math.min(100, Math.round((quota.used / quota.limit) * 100))
+      : 0;
   const badges = badgesForStats(getUserStats(user.id));
   const admin = isAdminEmail(user.email);
   const prdCount = projects.filter((p) => p.status === "prd_ready").length;
@@ -67,6 +72,7 @@ export default async function DashboardPage() {
           remaining={quota.remaining}
           limit={quota.limit}
           used={quota.used}
+          unlimited={quota.unlimited}
           quotaPercent={quotaPercent}
           resetsLabel={formatDate(quota.resetsAt)}
           prdCount={prdCount}
@@ -78,8 +84,19 @@ export default async function DashboardPage() {
           <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] text-base font-bold text-slate-950">
-                  {(publicUser.name || publicUser.email).trim().charAt(0).toUpperCase()}
+                <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-linear-to-br from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] text-base font-bold text-slate-950">
+                  {publicUser.avatarUrl ? (
+                    <Image
+                      src={publicUser.avatarUrl}
+                      alt={publicUser.name || publicUser.email}
+                      width={44}
+                      height={44}
+                      unoptimized
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    (publicUser.name || publicUser.email).trim().charAt(0).toUpperCase()
+                  )}
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

@@ -32,8 +32,30 @@ export function verifyPassword(password: string, stored: string): boolean {
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
 }
 
-function sessionKey(): Buffer {
-  return crypto.createHash("sha256").update(`session:${appSecret()}`).digest();
+function derivedKey(purpose: string): Buffer {
+  return crypto.createHash("sha256").update(`${purpose}:${appSecret()}`).digest();
+}
+
+function signTokenPayload<T extends object>(payload: T, purpose: string): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", derivedKey(purpose)).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+function verifyTokenPayload<T extends { exp?: unknown }>(token: string, purpose: string): T | null {
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", derivedKey(purpose)).update(body).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;
+    if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
+    return payload;
+  } catch {
+    return null;
+  }
 }
 
 export interface SessionPayload {
@@ -49,26 +71,30 @@ export interface SessionPayload {
 
 /** Token sesi: payload base64url + HMAC-SHA256, disimpan di cookie httpOnly. */
 export function signSession(payload: SessionPayload): string {
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", sessionKey()).update(body).digest("base64url");
-  return `${body}.${sig}`;
+  return signTokenPayload(payload, "session");
 }
 
 export function verifySession(token: string): SessionPayload | null {
-  const [body, sig] = token.split(".");
-  if (!body || !sig) return null;
-  const expected = crypto.createHmac("sha256", sessionKey()).update(body).digest("base64url");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as SessionPayload;
-    if (typeof payload.userId !== "string" || typeof payload.exp !== "number") return null;
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch {
-    return null;
-  }
+  const payload = verifyTokenPayload<SessionPayload>(token, "session");
+  if (!payload || typeof payload.userId !== "string") return null;
+  return payload;
+}
+
+export interface Pending2faPayload {
+  userId: string;
+  email: string;
+  exp: number;
+}
+
+/** Token sementara pending 2FA setelah verifikasi password/OAuth sebelum input OTP. */
+export function signTwoFactorToken(payload: Pending2faPayload): string {
+  return signTokenPayload(payload, "2fa");
+}
+
+export function verifyTwoFactorToken(token: string): Pending2faPayload | null {
+  const payload = verifyTokenPayload<Pending2faPayload>(token, "2fa");
+  if (!payload || typeof payload.userId !== "string" || typeof payload.email !== "string") return null;
+  return payload;
 }
 
 function contentKey(): Buffer {

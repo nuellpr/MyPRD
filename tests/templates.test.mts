@@ -37,9 +37,12 @@ describe("templates", () => {
     }
   });
 
-  it("getTemplate mengembalikan null untuk slug asing", () => {
+  it("getTemplate mengembalikan null untuk slug asing dan mencakup template baru", () => {
     assert.equal(getTemplate("tidak-ada"), null);
     assert.equal(getTemplate("next-starter")?.name, "Starter Next.js");
+    assert.equal(getTemplate("laravel-starter")?.name, "Starter Laravel");
+    assert.equal(getTemplate("expo-starter")?.name, "Starter Mobile Expo");
+    assert.ok(TEMPLATES.length >= 5);
   });
 
   it("stackLine menggabung label dengan +", () => {

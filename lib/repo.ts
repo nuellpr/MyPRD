@@ -451,15 +451,36 @@ export function findOrCreateOAuthUser(email: string, name: string): UserRow {
     default_model_id: "",
     phone: "",
     bio: "",
+    avatar_url: "",
+    two_factor_enabled: 0,
     email_verified: 0,
     created_at: Date.now(),
   };
   getDb()
     .prepare(
-      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, phone, bio, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, phone, bio, avatar_url, two_factor_enabled, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
-    .run(row.id, row.email, row.name, row.password_hash, row.plan, row.default_model_id, row.phone, row.bio, row.email_verified, row.created_at);
+    .run(
+      row.id,
+      row.email,
+      row.name,
+      row.password_hash,
+      row.plan,
+      row.default_model_id,
+      row.phone,
+      row.bio,
+      row.avatar_url,
+      row.two_factor_enabled,
+      row.email_verified,
+      row.created_at,
+    );
   return row;
+}
+
+/** Hapus permanen akun user beserta seluruh data turunan (cascade foreign key). */
+export function deleteUserAccount(userId: string): boolean {
+  const result = getDb().prepare("DELETE FROM users WHERE id = ?").run(userId);
+  return Number(result.changes) > 0;
 }
 
 export interface Session {

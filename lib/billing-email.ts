@@ -193,10 +193,11 @@ export interface PaymentSuccessEmailInput {
 
 export function buildPaymentSuccessEmail(input: PaymentSuccessEmailInput): { subject: string; html: string } {
   const plan = getPlan(input.planId);
+  const quotaLabel = plan.unlimited ? "PRD tak terbatas/bulan" : `${plan.monthlyQuota} PRD/bulan`;
   const subject = `[MyPRD] Pembayaran Berhasil — Paket ${plan.name} Sudah Aktif`;
   const body = `
     <p style="margin-top:0">Halo <strong>${escapeHtml(input.userName || "Builder")}</strong>,</p>
-    <p>Pembayaranmu telah terverifikasi <strong style="color:#34d399">Lunas</strong>! Paket <strong>${escapeHtml(plan.name)}</strong> sekarang aktif di akunmu dengan kuota <strong>${plan.monthlyQuota} generate PRD/bulan</strong>.</p>
+    <p>Pembayaranmu telah terverifikasi <strong style="color:#34d399">Lunas</strong>! Paket <strong>${escapeHtml(plan.name)}</strong> sekarang aktif di akunmu dengan kuota <strong>${quotaLabel}</strong>.</p>
     <table style="width:100%;border-collapse:collapse;background:#060912;border:1px solid #1e293b;border-radius:10px;margin:14px 0">
       <tr><td style="padding:8px 12px;color:#94a3b8">Order ID</td><td style="padding:8px 12px;text-align:right;color:#fff;font-family:monospace">${escapeHtml(input.orderId)}</td></tr>
       <tr><td style="padding:8px 12px;color:#94a3b8">Metode</td><td style="padding:8px 12px;text-align:right;color:#fff">${escapeHtml(methodLabel(input.provider))}</td></tr>

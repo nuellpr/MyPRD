@@ -79,7 +79,7 @@ test("buildPaymentSuccessEmail & buildPaymentRejectedEmail memuat status paket d
     dashboardUrl: "https://myprd.test/dashboard",
   });
   assert.match(okMail.subject, /Pro Sudah Aktif/);
-  assert.ok(okMail.html.includes("1000 generate PRD/bulan"));
+  assert.ok(okMail.html.includes("PRD tak terbatas/bulan"));
   assert.ok(okMail.html.includes("Lunas"));
 
   const failMail = buildPaymentRejectedEmail({

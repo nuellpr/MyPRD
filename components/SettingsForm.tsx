@@ -1,43 +1,146 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SubmitButton } from "@/components/auth/SubmitButton";
 import { Reveal } from "@/components/motion/Reveal";
-import { IconCheck, IconLock, IconMail, IconUser } from "./icons";
+import { IconCheck, IconLock, IconMail, IconShield, IconUser } from "./icons";
 
 interface SettingsFormProps {
   initialName: string;
   email: string;
   initialPhone: string;
   initialBio: string;
+  initialAvatarUrl: string;
+  initialTwoFactorEnabled: boolean;
   hasPassword: boolean;
 }
 
 const inputClass =
   "w-full rounded-xl border border-slate-700/80 bg-[#060912] px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-[#35d6ff] focus:shadow-[0_0_0_3px_rgba(53,214,255,0.14)]";
 
+async function resizeAvatarToDataUrl(file: File): Promise<string> {
+  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+    throw new Error("Format foto harus PNG, JPG, atau WebP.");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("Ukuran file foto maksimal 5 MB.");
+  }
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new window.Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("File gambar tidak dapat dibaca."));
+      el.src = objectUrl;
+    });
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Browser tidak mendukung pemrosesan gambar.");
+
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    const side = Math.min(w, h);
+    ctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, size, size);
+
+    for (const quality of [0.85, 0.72, 0.58]) {
+      const webp = canvas.toDataURL("image/webp", quality);
+      if (webp.startsWith("data:image/webp") && webp.length <= 180_000) return webp;
+      const jpeg = canvas.toDataURL("image/jpeg", quality);
+      if (jpeg.length <= 180_000) return jpeg;
+    }
+    throw new Error("Ukuran foto masih terlalu besar setelah dikompres. Pilih gambar lain.");
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function SettingsForm({
   initialName,
   email,
   initialPhone,
   initialBio,
+  initialAvatarUrl,
+  initialTwoFactorEnabled,
   hasPassword,
 }: SettingsFormProps) {
   const router = useRouter();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
   const [name, setName] = useState(initialName);
   const [phone, setPhone] = useState(initialPhone);
   const [bio, setBio] = useState(initialBio);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMessage, setAvatarMessage] = useState("");
+  const [avatarError, setAvatarError] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(initialTwoFactorEnabled);
+  const [tfaPassword, setTfaPassword] = useState("");
+  const [tfaConfirmDisable, setTfaConfirmDisable] = useState(false);
+  const [tfaBusy, setTfaBusy] = useState(false);
+  const [tfaMessage, setTfaMessage] = useState("");
+  const [tfaError, setTfaError] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMessage, setPwMessage] = useState("");
   const [pwError, setPwError] = useState("");
+
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  const initial = (name || email).trim().charAt(0).toUpperCase();
+
+  async function saveAvatar(nextAvatarUrl: string) {
+    setAvatarBusy(true);
+    setAvatarError("");
+    setAvatarMessage("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarUrl: nextAvatarUrl }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Gagal memperbarui foto profil.");
+      setAvatarUrl(nextAvatarUrl);
+      setAvatarMessage(nextAvatarUrl ? "Foto profil berhasil diperbarui." : "Foto profil dihapus.");
+      router.refresh();
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Gagal memperbarui foto profil.");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setAvatarError("");
+    setAvatarMessage("");
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await resizeAvatarToDataUrl(file);
+      await saveAvatar(dataUrl);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Gagal memproses foto.");
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +161,30 @@ export function SettingsForm({
       setError(err instanceof Error ? err.message : "Gagal menyimpan pengaturan.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function updateTwoFactor(enabled: boolean, password?: string) {
+    setTfaBusy(true);
+    setTfaError("");
+    setTfaMessage("");
+    try {
+      const res = await fetch("/api/settings/2fa", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled, password }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Gagal memperbarui status 2FA.");
+      setTwoFactorEnabled(enabled);
+      setTfaConfirmDisable(false);
+      setTfaPassword("");
+      setTfaMessage(enabled ? "2FA aktif: kode OTP 6 digit akan diminta tiap login." : "2FA dinonaktifkan.");
+      router.refresh();
+    } catch (err) {
+      setTfaError(err instanceof Error ? err.message : "Gagal memperbarui status 2FA.");
+    } finally {
+      setTfaBusy(false);
     }
   }
 
@@ -84,6 +211,26 @@ export function SettingsForm({
     }
   }
 
+  async function handleDeleteAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/settings/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: deleteConfirm, password: deletePassword }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Gagal menghapus akun.");
+      router.replace("/");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Gagal menghapus akun.");
+      setDeleteBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -93,6 +240,68 @@ export function SettingsForm({
               <IconUser className="h-4 w-4 text-[#35d6ff]" />
               <h2 className="text-sm font-semibold text-white">Profil</h2>
             </div>
+
+            {/* Foto Profil */}
+            <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-slate-800/80 bg-[#060912]/70 p-4">
+              <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-linear-to-br from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] text-xl font-bold text-slate-950">
+                {avatarUrl ? (
+                  <Image
+                    src={avatarUrl}
+                    alt={name || email}
+                    width={64}
+                    height={64}
+                    unoptimized
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  initial
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white">Foto profil</p>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  PNG, JPG, atau WebP. Otomatis dipotong kotak dan dikompres.
+                </p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={avatarBusy}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="rounded-lg border border-[#35d6ff]/40 bg-[#35d6ff]/10 px-3 py-1.5 text-xs font-medium text-[#7fe3ff] transition hover:bg-[#35d6ff]/20 disabled:opacity-50"
+                  >
+                    {avatarBusy ? "Mengunggah..." : "Ganti foto"}
+                  </button>
+                  {avatarUrl ? (
+                    <button
+                      type="button"
+                      disabled={avatarBusy}
+                      onClick={() => void saveAvatar("")}
+                      className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 transition hover:border-rose-400/50 hover:text-rose-200 disabled:opacity-50"
+                    >
+                      Hapus foto
+                    </button>
+                  ) : null}
+                </div>
+                {avatarError ? (
+                  <p role="alert" className="mt-2 text-xs text-rose-300">
+                    {avatarError}
+                  </p>
+                ) : null}
+                {avatarMessage ? (
+                  <p className="mt-2 inline-flex items-center gap-1 text-xs text-emerald-300">
+                    <IconCheck className="h-3.5 w-3.5" /> {avatarMessage}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="settings-name" className="mb-1.5 block text-xs font-medium text-slate-400">
@@ -193,6 +402,115 @@ export function SettingsForm({
         </div>
       </form>
 
+      {/* Autentikasi Dua Faktor (2FA) */}
+      <Reveal delay={0.08}>
+        <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <IconShield className="h-4 w-4 text-[#35d6ff]" />
+                <h2 className="text-sm font-semibold text-white">Autentikasi Dua Faktor (2FA)</h2>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                    twoFactorEnabled
+                      ? "border-emerald-400/30 bg-emerald-500/15 text-emerald-200"
+                      : "border-slate-700 bg-slate-900 text-slate-400"
+                  }`}
+                >
+                  {twoFactorEnabled ? "Aktif" : "Nonaktif"}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                Setiap masuk lewat email atau Google wajib memasukkan kode OTP 6 digit dari emailmu. Gagal 5 kali
+                berturut-turut otomatis mengunci verifikasi selama 24 jam.
+              </p>
+            </div>
+
+            {!twoFactorEnabled ? (
+              <button
+                type="button"
+                disabled={tfaBusy}
+                onClick={() => void updateTwoFactor(true)}
+                className="rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-50"
+              >
+                {tfaBusy ? "Mengaktifkan..." : "Aktifkan 2FA"}
+              </button>
+            ) : !tfaConfirmDisable ? (
+              <button
+                type="button"
+                disabled={tfaBusy}
+                onClick={() => {
+                  if (!hasPassword) {
+                    void updateTwoFactor(false);
+                  } else {
+                    setTfaConfirmDisable(true);
+                    setTfaError("");
+                    setTfaMessage("");
+                  }
+                }}
+                className="rounded-xl border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 transition hover:border-rose-400/50 hover:text-rose-200 disabled:opacity-50"
+              >
+                Nonaktifkan 2FA
+              </button>
+            ) : null}
+          </div>
+
+          {tfaConfirmDisable && twoFactorEnabled && hasPassword ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void updateTwoFactor(false, tfaPassword);
+              }}
+              className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-800 bg-[#060912]/70 p-4 sm:flex-row sm:items-end"
+            >
+              <div className="flex-1">
+                <label htmlFor="tfa-disable-password" className="mb-1.5 block text-xs font-medium text-slate-400">
+                  Masukkan password akun untuk menonaktifkan 2FA
+                </label>
+                <input
+                  id="tfa-disable-password"
+                  type="password"
+                  required
+                  value={tfaPassword}
+                  onChange={(e) => setTfaPassword(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={tfaBusy}
+                  className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-3.5 py-2.5 text-xs font-semibold text-rose-200 hover:bg-rose-500/25 disabled:opacity-50"
+                >
+                  {tfaBusy ? "Memproses..." : "Konfirmasi"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTfaConfirmDisable(false);
+                    setTfaPassword("");
+                  }}
+                  className="rounded-xl border border-slate-700 px-3 py-2.5 text-xs text-slate-300 hover:text-white"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {tfaError ? (
+            <p role="alert" className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+              {tfaError}
+            </p>
+          ) : null}
+          {tfaMessage ? (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-emerald-300">
+              <IconCheck className="h-4 w-4" /> {tfaMessage}
+            </p>
+          ) : null}
+        </section>
+      </Reveal>
+
       <Reveal delay={0.1}>
         <form onSubmit={handlePassword} className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
           <div className="mb-1 flex items-center gap-2">
@@ -260,6 +578,97 @@ export function SettingsForm({
             </p>
           )}
         </form>
+      </Reveal>
+
+      {/* Zona Berbahaya: Hapus Akun */}
+      <Reveal delay={0.14}>
+        <section className="rounded-2xl border border-rose-500/30 bg-rose-950/10 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-rose-200">Hapus akun</h2>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                Menghapus akun bersifat permanen: seluruh project, PRD, riwayat chat, dan transaksi akan ikut terhapus
+                dan tidak bisa dikembalikan.
+              </p>
+            </div>
+            {!deleteOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteOpen(true);
+                  setDeleteError("");
+                }}
+                className="rounded-xl border border-rose-500/40 bg-rose-500/15 px-3.5 py-2 text-xs font-semibold text-rose-200 transition hover:bg-rose-500/25"
+              >
+                Hapus akun permanen
+              </button>
+            ) : null}
+          </div>
+
+          {deleteOpen ? (
+            <form onSubmit={handleDeleteAccount} className="mt-4 space-y-3 rounded-xl border border-rose-500/25 bg-[#060912]/80 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="delete-confirm" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    Ketik <span className="font-mono font-bold text-rose-300">HAPUS</span> untuk konfirmasi
+                  </label>
+                  <input
+                    id="delete-confirm"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder="HAPUS"
+                    required
+                    className={inputClass}
+                  />
+                </div>
+                {hasPassword ? (
+                  <div>
+                    <label htmlFor="delete-password" className="mb-1.5 block text-xs font-medium text-slate-300">
+                      Password akun
+                    </label>
+                    <input
+                      id="delete-password"
+                      type="password"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      required
+                      className={inputClass}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              {deleteError ? (
+                <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+                  {deleteError}
+                </p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={deleteBusy || deleteConfirm.trim().toUpperCase() !== "HAPUS"}
+                  className="rounded-xl bg-rose-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deleteBusy ? "Menghapus akun..." : "Ya, hapus akun saya"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteBusy}
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    setDeleteConfirm("");
+                    setDeletePassword("");
+                    setDeleteError("");
+                  }}
+                  className="rounded-xl border border-slate-700 px-3.5 py-2 text-xs text-slate-300 hover:text-white"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </section>
       </Reveal>
     </div>
   );

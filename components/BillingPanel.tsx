@@ -15,6 +15,7 @@ export interface BillingPlanOption {
   name: string;
   priceIdr: number;
   monthlyQuota: number;
+  unlimited?: boolean;
   features: string[];
 }
 
@@ -368,7 +369,9 @@ export function BillingPanel({
                 <span className="text-3xl font-bold text-white">{formatIdr(plan.priceIdr)}</span>
                 <span className="text-sm text-slate-400">/bulan</span>
               </p>
-              <p className="mt-1 text-xs text-slate-400">{plan.monthlyQuota} generate PRD/bulan</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {plan.unlimited ? "PRD tak terbatas/bulan" : `${plan.monthlyQuota} PRD/bulan`}
+              </p>
               <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((feature) => (
                   <li key={feature} className="flex gap-2">

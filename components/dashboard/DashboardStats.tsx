@@ -9,6 +9,7 @@ export function DashboardStats({
   remaining,
   limit,
   used,
+  unlimited = false,
   quotaPercent,
   resetsLabel,
   prdCount,
@@ -17,6 +18,7 @@ export function DashboardStats({
   remaining: number;
   limit: number;
   used: number;
+  unlimited?: boolean;
   quotaPercent: number;
   resetsLabel: string;
   prdCount: number;
@@ -29,23 +31,31 @@ export function DashboardStats({
       <StaggerItem className="card-lift rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-5">
         <p className="text-xs uppercase tracking-wide text-slate-500">Sisa kuota generate</p>
         <p className="mt-2 text-2xl font-semibold text-white">
-          <CountUp value={remaining} />
-          <span className="text-sm font-normal text-slate-400"> / <CountUp value={limit} /></span>
+          {unlimited ? (
+            <>
+              ∞ <span className="text-sm font-normal text-[#7fe3ff]">Tak terbatas</span>
+            </>
+          ) : (
+            <>
+              <CountUp value={remaining} />
+              <span className="text-sm font-normal text-slate-400"> / <CountUp value={limit} /></span>
+            </>
+          )}
         </p>
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
           <motion.div
             initial={{ scaleX: 0 }}
-            animate={{ scaleX: quotaPercent / 100 }}
+            animate={{ scaleX: unlimited ? 1 : quotaPercent / 100 }}
             transition={{ duration: reduced ? 0.01 : 0.7, ease: [0.22, 1, 0.36, 1] }}
             className={`h-full w-full origin-left rounded-full ${
-              quotaPercent >= 90
+              !unlimited && quotaPercent >= 90
                 ? "bg-red-500"
                 : "bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa]"
             }`}
           />
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          Reset {resetsLabel} · terpakai {used}
+          {unlimited ? `Terpakai ${used} bulan ini · tanpa batas` : `Reset ${resetsLabel} · terpakai ${used}`}
         </p>
       </StaggerItem>
 

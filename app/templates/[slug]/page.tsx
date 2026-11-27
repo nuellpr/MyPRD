@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CopyButton } from "@/components/CopyButton";
-import { IconArrowRight, IconCheck, TemplateGlyph } from "@/components/icons";
+import { IconArrowRight, IconCheck } from "@/components/icons";
 import { Reveal, Stagger, StaggerItem, WordReveal } from "@/components/motion/Reveal";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
+import { TemplateIcon } from "@/components/templates/TemplateIcon";
 import { currentUser } from "@/lib/auth";
 import { getTemplate } from "@/lib/templates";
 
@@ -35,7 +36,7 @@ export default async function TemplateDetailPage({ params }: PageParams) {
         <Reveal className="mt-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <TemplateGlyph slug={template.slug} />
+              <TemplateIcon slug={template.slug} />
               <div>
                 <WordReveal text={template.name} className="text-3xl font-bold tracking-tight text-white" />
                 <p className="mt-1 text-sm text-slate-400">{template.tagline}</p>

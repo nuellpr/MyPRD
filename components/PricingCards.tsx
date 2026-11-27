@@ -33,7 +33,7 @@ export function PricingCards({ highlight }: { highlight?: PlanId }) {
                 <span className="text-sm text-slate-400">{plan.priceIdr === 0 ? " selamanya" : "/bulan"}</span>
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                {plan.monthlyQuota >= 1000 ? "Kuota besar (fair use)" : `${plan.monthlyQuota} generate PRD/bulan`}
+                {plan.unlimited ? "PRD tak terbatas/bulan" : `${plan.monthlyQuota} PRD/bulan`}
               </p>
               <ul className="mt-5 flex-1 space-y-2 text-sm text-slate-300">
                 {plan.features.map((feature) => (

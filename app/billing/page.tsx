@@ -48,7 +48,8 @@ export default async function BillingPage() {
           <span className="font-medium text-slate-200">
             {PLANS[user.plan as keyof typeof PLANS]?.name ?? user.plan}
           </span>
-          {" · "}sisa kuota {quota.remaining}/{quota.limit} bulan ini
+          {" · "}
+          {quota.unlimited ? "kuota tak terbatas" : `sisa kuota ${quota.remaining}/${quota.limit} bulan ini`}
         </p>
 
         <div className="mt-6">

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { IconArrowRight, TemplateGlyph } from "@/components/icons";
+import { IconArrowRight } from "@/components/icons";
 import { Stagger, StaggerItem } from "@/components/motion/Reveal";
+import { TemplateIcon } from "./TemplateIcon";
 
 export interface TemplateSummary {
   slug: string;
@@ -33,7 +34,7 @@ export function TemplateCards({ items }: { items: TemplateSummary[] }) {
           <div onMouseMove={handleMove} className="flex flex-1 flex-col">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <TemplateGlyph slug={template.slug} />
+                <TemplateIcon slug={template.slug} />
                 <div>
                   <h2 className="text-lg font-semibold text-white">
                     <Link href={`/templates/${template.slug}`} className="transition hover:text-[#35d6ff]">

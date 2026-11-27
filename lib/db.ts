@@ -19,6 +19,8 @@ export interface UserRow {
   default_model_id: string;
   phone: string;
   bio: string;
+  avatar_url: string;
+  two_factor_enabled: number;
   email_verified: number;
   created_at: number;
 }
@@ -97,16 +99,18 @@ PRAGMA temp_store = MEMORY;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  email         TEXT NOT NULL UNIQUE,
-  name          TEXT NOT NULL DEFAULT '',
-  password_hash TEXT, -- nullable: user OAuth tidak punya password
-  plan          TEXT NOT NULL DEFAULT 'free',
-  default_model_id TEXT NOT NULL DEFAULT '',
-  phone         TEXT NOT NULL DEFAULT '',
-  bio           TEXT NOT NULL DEFAULT '',
-  email_verified INTEGER NOT NULL DEFAULT 1,
-  created_at    INTEGER NOT NULL
+  id                 TEXT PRIMARY KEY,
+  email              TEXT NOT NULL UNIQUE,
+  name               TEXT NOT NULL DEFAULT '',
+  password_hash      TEXT, -- nullable: user OAuth tidak punya password
+  plan               TEXT NOT NULL DEFAULT 'free',
+  default_model_id   TEXT NOT NULL DEFAULT '',
+  phone              TEXT NOT NULL DEFAULT '',
+  bio                TEXT NOT NULL DEFAULT '',
+  avatar_url         TEXT NOT NULL DEFAULT '',
+  two_factor_enabled INTEGER NOT NULL DEFAULT 0,
+  email_verified     INTEGER NOT NULL DEFAULT 1,
+  created_at         INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -200,6 +204,14 @@ CREATE TABLE IF NOT EXISTS otp_codes (
   attempts   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_otp_expires ON otp_codes(expires_at);
+
+CREATE TABLE IF NOT EXISTS auth_lockouts (
+  key          TEXT PRIMARY KEY,
+  failed_count INTEGER NOT NULL DEFAULT 0,
+  locked_until INTEGER NOT NULL DEFAULT 0,
+  updated_at   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_lockouts_until ON auth_lockouts(locked_until);
 `;
 
 function initDb(): DatabaseSync {
@@ -213,11 +225,13 @@ function initDb(): DatabaseSync {
   sweepExpiredSessions(db);
   sweepPasswordResetTokens(db);
   sweepOtpCodes(db);
+  sweepExpiredLockouts(db);
   migrateUsersPasswordNullable(db);
   migrateUsersDefaultModel(db);
   migrateUserProfile(db);
   migrateEmailVerified(db);
   migrateProjectAgentToken(db);
+  migrateUserAvatarAnd2fa(db);
   return db;
 }
 
@@ -317,6 +331,23 @@ export function migrateProjectAgentToken(db: DatabaseSync): void {
   const cols = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "agent_token_enc")) {
     db.exec("ALTER TABLE projects ADD COLUMN agent_token_enc TEXT");
+  }
+}
+
+/** Bersihkan catatan lockout yang sudah kedaluwarsa lebih dari 24 jam. */
+function sweepExpiredLockouts(db: DatabaseSync): void {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  db.prepare("DELETE FROM auth_lockouts WHERE locked_until > 0 AND locked_until < ?").run(cutoff);
+}
+
+/** Migrasi aditif: kolom foto profil dan flag 2FA pada user. */
+export function migrateUserAvatarAnd2fa(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "avatar_url")) {
+    db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''");
+  }
+  if (!cols.some((c) => c.name === "two_factor_enabled")) {
+    db.exec("ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER NOT NULL DEFAULT 0");
   }
 }
 

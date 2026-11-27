@@ -12,8 +12,9 @@ export interface Plan {
   id: PlanId;
   name: string;
   priceIdr: number;
-  /** Kuota generate PRD + task breakdown per bulan. */
+  /** Kuota generate PRD + task breakdown per bulan (abaikan jika unlimited = true). */
   monthlyQuota: number;
+  unlimited?: boolean;
   features: string[];
 }
 
@@ -23,6 +24,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Free",
     priceIdr: 0,
     monthlyQuota: freeMonthlyQuota,
+    unlimited: false,
     features: [
       "Kuota generate terbatas per bulan",
       "Model AI standar",
@@ -34,9 +36,11 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "starter",
     name: "Starter",
     priceIdr: 49000,
-    monthlyQuota: 100,
+    monthlyQuota: 25,
+    unlimited: false,
     features: [
-      "Semua model AI standar",
+      "25 generate PRD per bulan",
+      "Akses model AI GPT-6.2 Astra",
       "Export markdown + PDF",
       "Riwayat project tanpa batas",
     ],
@@ -45,9 +49,11 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "pro",
     name: "Pro",
     priceIdr: 149000,
-    monthlyQuota: 1000,
+    monthlyQuota: 0,
+    unlimited: true,
     features: [
-      "Akses model AI premium",
+      "Generate PRD tak terbatas",
+      "Akses model AI GPT-6.2 Astra prioritas",
       "Export markdown + PDF",
       "Priority support",
     ],
@@ -79,6 +85,7 @@ export interface QuotaState {
   used: number;
   limit: number;
   remaining: number;
+  unlimited: boolean;
   /** true kalau user masih boleh melakukan operasi yang mengonsumsi kuota. */
   allowed: boolean;
   resetsAt: number;
@@ -86,16 +93,29 @@ export interface QuotaState {
 
 export function evaluateQuota(planId: string, used: number, reference = Date.now()): QuotaState {
   const plan = getPlan(planId);
+  const d = new Date(reference);
+  const resetsAt = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+  if (plan.unlimited) {
+    return {
+      plan: plan.id,
+      used,
+      limit: 0,
+      remaining: 0,
+      unlimited: true,
+      allowed: true,
+      resetsAt,
+    };
+  }
   const limit = plan.monthlyQuota;
   const remaining = Math.max(0, limit - used);
-  const d = new Date(reference);
   return {
     plan: plan.id,
     used,
     limit,
     remaining,
+    unlimited: false,
     allowed: remaining > 0,
-    resetsAt: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(),
+    resetsAt,
   };
 }
 

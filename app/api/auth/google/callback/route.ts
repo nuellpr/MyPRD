@@ -1,4 +1,4 @@
-import { findUserByEmail, setSessionCookie } from "@/lib/auth";
+import { AuthError, findUserByEmail, setPending2faCookie, setSessionCookie } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
 import { errorToResponse, publicOrigin } from "@/lib/http";
 import { issueOtp } from "@/lib/otp";
@@ -37,6 +37,27 @@ export async function GET(request: Request) {
         html: `<p>Kode verifikasi MyPRD kamu: <strong style="font-size:24px;letter-spacing:6px">${otp}</strong></p><p>Berlaku 10 menit. Jangan bagikan kode ini ke siapa pun.</p>`,
       });
       const params = new URLSearchParams({ email: user.email, purpose: "google" });
+      if (process.env.NODE_ENV !== "production" && !process.env.RESEND_API_KEY) params.set("devCode", otp);
+      return Response.redirect(`${origin}/verifikasi-otp?${params}`, 302);
+    }
+
+    if (user.two_factor_enabled === 1) {
+      let otp: string;
+      try {
+        otp = issueOtp(user.email, "2fa", user.id);
+      } catch (err) {
+        if (err instanceof AuthError && err.status === 429) {
+          return Response.redirect(`${origin}/login?oauth=locked`, 302);
+        }
+        throw err;
+      }
+      await sendEmail({
+        to: user.email,
+        subject: "Kode 2FA masuk MyPRD",
+        html: `<p>Kode verifikasi 2FA MyPRD kamu: <strong style="font-size:24px;letter-spacing:6px">${otp}</strong></p><p>Berlaku 10 menit. Jangan bagikan kode ini ke siapa pun.</p>`,
+      });
+      await setPending2faCookie(user.id, user.email);
+      const params = new URLSearchParams({ email: user.email, purpose: "2fa", next: verified.next });
       if (process.env.NODE_ENV !== "production" && !process.env.RESEND_API_KEY) params.set("devCode", otp);
       return Response.redirect(`${origin}/verifikasi-otp?${params}`, 302);
     }

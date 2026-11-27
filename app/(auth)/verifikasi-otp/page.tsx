@@ -28,8 +28,10 @@ function VerifikasiForm() {
   const reduced = useReducedMotion();
 
   const email = params.get("email") ?? "";
+  const rawPurpose = params.get("purpose");
   const purpose =
-    params.get("purpose") === "google" || params.get("purpose") === "reset" ? params.get("purpose")! : "register";
+    rawPurpose === "google" || rawPurpose === "reset" || rawPurpose === "2fa" ? rawPurpose : "register";
+  const is2fa = purpose === "2fa";
   const initialDevCode = params.get("devCode") ?? "";
   const nextParam = params.get("next");
   const safeNext = nextParam?.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
@@ -106,7 +108,12 @@ function VerifikasiForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, purpose }),
       });
-      const data = (await res.json()) as { devCode?: string };
+      const data = (await res.json().catch(() => ({}))) as { devCode?: string; error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Gagal mengirim ulang kode. Coba lagi.");
+        setStatus("error");
+        return;
+      }
       if (data.devCode) {
         setDevCode(data.devCode);
         setCode(data.devCode);
@@ -177,9 +184,24 @@ function VerifikasiForm() {
         </div>
       </div>
 
-      <h1 className="text-center text-2xl font-semibold text-white">Verifikasi kode OTP</h1>
-      <p className="mt-1 mb-6 text-center text-sm text-slate-400">
-        Kode 6 digit sudah dikirim ke <span className="text-slate-200">{email || "emailmu"}</span>. Berlaku 10 menit.
+      <h1 className="text-center text-2xl font-semibold text-white">
+        {is2fa ? "Verifikasi 2FA" : "Verifikasi kode OTP"}
+      </h1>
+      <p className="mt-1 text-center text-sm text-slate-400">
+        {is2fa ? (
+          <>
+            Masukkan kode 2FA 6 digit yang dikirim ke <span className="text-slate-200">{email || "emailmu"}</span>.
+            Berlaku 10 menit.
+          </>
+        ) : (
+          <>
+            Kode 6 digit sudah dikirim ke <span className="text-slate-200">{email || "emailmu"}</span>. Berlaku 10
+            menit.
+          </>
+        )}
+      </p>
+      <p className="mt-1 mb-6 text-center text-xs text-slate-500">
+        Gagal 5 kali berturut-turut akan mengunci verifikasi selama 24 jam.
       </p>
 
       <form

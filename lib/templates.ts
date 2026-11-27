@@ -72,6 +72,39 @@ Ikuti best practice ini:
 
 Setelah selesai, tampilkan: struktur folder, cara menjalankan (uvicorn + docker compose up), dan daftar endpoint API yang tersedia.`;
 
+const LARAVEL_INSTALL_PROMPT = `Siapkan starter project aplikasi web di folder kosong ini dengan stack berikut:
+
+- Backend + Fullstack: Laravel 12 (Controller, FormRequest validation, Blade/Inertia)
+- Runtime: PHP 8.3 (Composer + konfigurasi OPcache siap produksi)
+- Database: PostgreSQL (jalan di Docker) + sistem migration & seeder Eloquent
+- Auth: Session & CSRF protection bawaan Laravel + rate limiting pada endpoint sensitif
+- Deployment: Dockerfile multi-stage + docker-compose (PHP-FPM, Nginx, dan PostgreSQL)
+
+Ikuti best practice ini:
+- Semua secret, APP_KEY, dan kredensial hanya lewat environment variable (.env), jangan hardcode
+- Validasi semua input pengguna di FormRequest sebelum menyentuh database
+- Tambahkan proteksi rate limit pada endpoint login, register, dan AI/webhook
+- Rancang migrasi database sejak awal (tabel users, jobs, dan contoh tabel domain)
+- Jangan install package Composer yang tidak terpakai
+
+Setelah selesai, tampilkan: struktur folder, cara menjalankan (docker compose up -d && php artisan migrate), dan daftar route yang tersedia.`;
+
+const EXPO_INSTALL_PROMPT = `Siapkan starter project aplikasi mobile Android & iOS di folder kosong ini dengan stack berikut:
+
+- Mobile: React Native (komponen responsif + safe area + dark theme ready)
+- Framework: Expo (Expo Router file-based navigation, EAS Build config)
+- Bahasa: TypeScript strict mode (type safety penuh)
+- Backend & Database: Supabase (PostgreSQL, Row Level Security, Auth & session via SecureStore)
+
+Ikuti best practice ini:
+- Semua kunci API publik dan rahasia hanya lewat environment variable (.env & EXPO_PUBLIC_*), jangan hardcode secret
+- Validasi semua input form di klien dan aktifkan Row Level Security (RLS) pada setiap tabel Supabase
+- Simpan sesi/token dengan aman menggunakan expo-secure-store, bukan AsyncStorage biasa
+- Rancang struktur screen sejak awal (tabs utama, detail, dan alur login/register)
+- Jangan install library native yang tidak dipakai agar build tetap ringan
+
+Setelah selesai, tampilkan: struktur folder, cara menjalankan (npx expo start), dan daftar screen/route yang tersedia.`;
+
 const START_STEPS = [
   {
     title: "Siapkan komputermu (sekali saja)",
@@ -95,6 +128,22 @@ const FASTAPI_STEPS = [
   {
     title: "Siapkan komputermu (sekali saja)",
     body: "Install Python 3.12 dan Docker Desktop, lalu nyalakan Docker. Pakai AI coding agent favoritmu: Claude Code, Cursor, OpenCode, atau Codex.",
+  },
+  ...START_STEPS.slice(1),
+];
+
+const LARAVEL_STEPS = [
+  {
+    title: "Siapkan komputermu (sekali saja)",
+    body: "Install PHP 8.3, Composer, dan Docker Desktop, lalu nyalakan Docker. Pakai AI coding agent favoritmu: Claude Code, Cursor, OpenCode, atau Codex.",
+  },
+  ...START_STEPS.slice(1),
+];
+
+const EXPO_STEPS = [
+  {
+    title: "Siapkan komputermu (sekali saja)",
+    body: "Install Node.js dan aplikasi Expo Go di HP atau emulator. Pakai AI coding agent favoritmu: Claude Code, Cursor, OpenCode, atau Codex.",
   },
   ...START_STEPS.slice(1),
 ];
@@ -174,6 +223,56 @@ export const TEMPLATES: Template[] = [
     installPrompt: FASTAPI_INSTALL_PROMPT,
     ideaContext:
       "Tech stack pilihan: FastAPI (backend API) + PostgreSQL + Docker (template Starter FastAPI MyPRD).",
+  },
+  {
+    slug: "laravel-starter",
+    name: "Starter Laravel",
+    version: "0.1.0",
+    price: "Gratis",
+    tagline: "Template web & API Laravel + PostgreSQL",
+    description:
+      "Kerangka aplikasi Laravel 12 + PHP 8.3 + PostgreSQL siap produksi dengan autentikasi session, migration Eloquent, rate limiting, dan Docker Compose.",
+    stack: [
+      { category: "Backend", label: "Laravel" },
+      { category: "Runtime", label: "PHP" },
+      { category: "Database", label: "PostgreSQL" },
+      { category: "Deployment", label: "Docker" },
+    ],
+    includes: [
+      "Struktur Laravel 12 rapi (Controller, FormRequest validation, Blade/Inertia)",
+      "Skema database + sistem migration & seeder PostgreSQL",
+      "Auth session aman + rate limiting bawaan Laravel",
+      "Setup Dockerfile + docker-compose siap deploy",
+    ],
+    steps: LARAVEL_STEPS,
+    installPrompt: LARAVEL_INSTALL_PROMPT,
+    ideaContext:
+      "Tech stack pilihan: Laravel + PHP + PostgreSQL + Docker (template Starter Laravel MyPRD).",
+  },
+  {
+    slug: "expo-starter",
+    name: "Starter Mobile Expo",
+    version: "0.1.0",
+    price: "Gratis",
+    tagline: "Template mobile Android & iOS",
+    description:
+      "Kerangka aplikasi mobile cross-platform React Native + Expo Router dengan TypeScript strict, auth persisten, dan backend PostgreSQL real-time Supabase.",
+    stack: [
+      { category: "Mobile", label: "React Native" },
+      { category: "Framework", label: "Expo" },
+      { category: "Bahasa", label: "TypeScript" },
+      { category: "Backend", label: "Supabase" },
+    ],
+    includes: [
+      "Navigasi file-based Expo Router (Tab + Stack layout siap pakai)",
+      "TypeScript strict mode & struktur komponen mobile modular",
+      "Auth & database PostgreSQL real-time Supabase dengan Row Level Security",
+      "Penyimpanan token aman dengan SecureStore + siap build EAS",
+    ],
+    steps: EXPO_STEPS,
+    installPrompt: EXPO_INSTALL_PROMPT,
+    ideaContext:
+      "Tech stack pilihan: React Native + Expo + TypeScript + Supabase (template Starter Mobile Expo MyPRD).",
   },
 ];
 

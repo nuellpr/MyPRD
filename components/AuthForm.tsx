@@ -61,7 +61,9 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
   const isRegister = mode === "register";
   const nextParam = safeNext(searchParams.get("next"));
   const googleHref = `/api/auth/google${nextParam ? `?next=${encodeURIComponent(nextParam)}` : ""}`;
-  const oauthFailed = searchParams.get("oauth") === "gagal";
+  const oauthParam = searchParams.get("oauth");
+  const oauthFailed = oauthParam === "gagal";
+  const oauthLocked = oauthParam === "locked";
   const strength = isRegister ? scorePassword(password) : 0;
 
   async function handleSubmit(event: React.FormEvent) {
@@ -74,7 +76,12 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(isRegister ? { email, password, name } : { email, password }),
       });
-      const data = (await res.json()) as { error?: string; devCode?: string };
+      const data = (await res.json()) as {
+        error?: string;
+        devCode?: string;
+        requires2fa?: boolean;
+        email?: string;
+      };
       if (!res.ok) {
         setError(data.error ?? "Terjadi kesalahan.");
         setShakeKey((k) => k + 1);
@@ -84,6 +91,11 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
       setSubmitStatus("success");
       if (isRegister) {
         const params = new URLSearchParams({ email, purpose: "register" });
+        if (nextParam) params.set("next", nextParam);
+        if (data.devCode) params.set("devCode", data.devCode);
+        router.push(`/verifikasi-otp?${params.toString()}`);
+      } else if (data.requires2fa) {
+        const params = new URLSearchParams({ email: data.email || email, purpose: "2fa" });
         if (nextParam) params.set("next", nextParam);
         if (data.devCode) params.set("devCode", data.devCode);
         router.push(`/verifikasi-otp?${params.toString()}`);
@@ -175,7 +187,7 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
         </StaggerItem>
 
         <AnimatePresence>
-          {error || oauthFailed ? (
+          {error || oauthFailed || oauthLocked ? (
             <motion.p
               role="alert"
               initial={{ opacity: 0, y: -4 }}
@@ -183,7 +195,10 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
               exit={{ opacity: 0, y: -4 }}
               className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300"
             >
-              {error || "Login Google gagal atau dibatalkan. Coba lagi."}
+              {error ||
+                (oauthLocked
+                  ? "Verifikasi 2FA dikunci 24 jam karena gagal 5 kali berturut-turut."
+                  : "Login Google gagal atau dibatalkan. Coba lagi.")}
             </motion.p>
           ) : null}
         </AnimatePresence>
