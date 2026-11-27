@@ -127,8 +127,18 @@ export function buildReviseMessages(input: {
   ];
 }
 
+export interface PromptSyncConfig {
+  webhookUrl: string;
+  token: string;
+}
+
 /** Susun prompt implementasi siap tempel untuk modal "Implemen" (Claude Code / Cursor / Antigravity / Codex). */
-export function buildImplementationPrompt(projectTitle: string, prdMarkdown: string, tasks: ParsedTask[]): string {
+export function buildImplementationPrompt(
+  projectTitle: string,
+  prdMarkdown: string,
+  tasks: ParsedTask[],
+  sync?: PromptSyncConfig | null,
+): string {
   const pending = tasks.filter((t) => !t.done);
   const taskLines = (pending.length > 0 ? pending : tasks)
     .map((t) => {
@@ -141,14 +151,26 @@ export function buildImplementationPrompt(projectTitle: string, prdMarkdown: str
     })
     .join("\n");
 
-  return [
-    `Kamu akan mengimplementasikan project "${projectTitle}" secara bertahap sesuai PRD dan daftar task di bawah ini.`,
-    "",
+  const instructions = [
     "INSTRUKSI KERJA UNTUK AI CODING AGENT:",
     "1. Baca spesifikasi arsitektur, database schema, user flow, dan acceptance criteria pada PRD terlebih dahulu.",
     "2. Kerjakan task secara berurutan mengikuti dependency (`depends`) dari Fase 1 hingga selesai.",
     "3. Setelah menyelesaikan satu task, jalankan typecheck/lint/test untuk memverifikasi tidak ada error sebelum lanjut ke task berikutnya.",
     "4. Jangan hardcode secret atau API key — gunakan environment variables.",
+  ];
+
+  if (sync) {
+    instructions.push(
+      "5. LAPORKAN PROGRES TASK KE MYPRD SECARA REALTIME (ganti `T1` sesuai ID task):",
+      `   - Sebelum mulai mengerjakan task: curl -sS -X POST "${sync.webhookUrl}" -H "Authorization: Bearer ${sync.token}" -H "Content-Type: application/json" -d '{"taskId":"T1","status":"in_progress"}'`,
+      `   - Setelah task selesai & lulus verifikasi (atau pakai "failed" bila gagal/terblokir): curl -sS -X POST "${sync.webhookUrl}" -H "Authorization: Bearer ${sync.token}" -H "Content-Type: application/json" -d '{"taskId":"T1","status":"done"}'`,
+    );
+  }
+
+  return [
+    `Kamu akan mengimplementasikan project "${projectTitle}" secara bertahap sesuai PRD dan daftar task di bawah ini.`,
+    "",
+    ...instructions,
     "",
     `## Daftar Task yang Harus Dikerjakan (${pending.length}/${tasks.length} tersisa)`,
     taskLines || "(Lihat bagian Task Breakdown pada PRD di bawah)",

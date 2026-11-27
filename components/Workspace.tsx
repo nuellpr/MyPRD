@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { deriveTitleFromPrd } from "@/lib/prd";
 import { buildFeatureTree } from "@/lib/roadmap";
 import { parseTasks, updateTaskStatusesInPrd, type TaskStatus } from "@/lib/tasks";
@@ -85,6 +85,62 @@ export function Workspace({
     () => features.reduce((sum, f) => sum + f.subFeatures.length, 0),
     [features],
   );
+
+  const prdVersionRef = useRef(prdVersion);
+  const savingPrdRef = useRef(savingPrd);
+  const streamingRef = useRef(streaming);
+
+  useEffect(() => {
+    prdVersionRef.current = prdVersion;
+  }, [prdVersion]);
+
+  useEffect(() => {
+    savingPrdRef.current = savingPrd;
+  }, [savingPrd]);
+
+  useEffect(() => {
+    streamingRef.current = streaming;
+  }, [streaming]);
+
+  // Sinkronisasi otomatis setiap 3 detik saat tab aktif supaya progres AI agent muncul realtime.
+  const hasPrd = Boolean(prd);
+  useEffect(() => {
+    if (!hasPrd) return;
+
+    async function syncLatestPrd() {
+      if (document.visibilityState !== "visible") return;
+      if (savingPrdRef.current || streamingRef.current) return;
+      try {
+        const res = await fetch(`/api/projects/${project.id}/prd`, { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json().catch(() => ({}))) as {
+          prd?: { content?: string; version?: number } | null;
+        };
+        if (
+          data.prd?.content &&
+          typeof data.prd.version === "number" &&
+          data.prd.version > prdVersionRef.current &&
+          !savingPrdRef.current &&
+          !streamingRef.current
+        ) {
+          setPrd(data.prd.content);
+          setPrdVersion(data.prd.version);
+        }
+      } catch {
+        // Abaikan error jaringan sementara saat polling latar.
+      }
+    }
+
+    const timer = window.setInterval(() => void syncLatestPrd(), 3000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void syncLatestPrd();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [hasPrd, project.id]);
 
   async function savePrdContent(nextPrd: string) {
     const prevPrd = prd;
@@ -387,6 +443,13 @@ export function Workspace({
           </h1>
           <span className="rounded-full border border-[#35d6ff]/40 bg-[#35d6ff]/12 px-2 py-0.5 font-mono text-[11px] font-semibold text-[#7fe3ff]">
             #v{prdVersion}
+          </span>
+          <span
+            title="Otomatis sinkron setiap 3 detik dengan AI agent"
+            className="hidden items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300 sm:inline-flex"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Live Sync
           </span>
         </div>
 

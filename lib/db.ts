@@ -31,6 +31,7 @@ export interface ProjectRow {
   model_id: string;
   language: string;
   status: string;
+  agent_token_enc?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -109,15 +110,16 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS projects (
-  id         TEXT PRIMARY KEY,
-  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  title      TEXT NOT NULL,
-  idea       TEXT NOT NULL DEFAULT '',
-  model_id   TEXT NOT NULL,
-  language   TEXT NOT NULL DEFAULT 'id',
-  status     TEXT NOT NULL DEFAULT 'chatting',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  id              TEXT PRIMARY KEY,
+  user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  idea            TEXT NOT NULL DEFAULT '',
+  model_id        TEXT NOT NULL,
+  language        TEXT NOT NULL DEFAULT 'id',
+  status          TEXT NOT NULL DEFAULT 'chatting',
+  agent_token_enc TEXT,
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at DESC);
 
@@ -215,6 +217,7 @@ function initDb(): DatabaseSync {
   migrateUsersDefaultModel(db);
   migrateUserProfile(db);
   migrateEmailVerified(db);
+  migrateProjectAgentToken(db);
   return db;
 }
 
@@ -306,6 +309,14 @@ export function migrateEmailVerified(db: DatabaseSync): void {
   const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "email_verified")) {
     db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1");
+  }
+}
+
+/** Migrasi aditif: kolom token terenkripsi untuk sinkronisasi webhook AI agent. */
+export function migrateProjectAgentToken(db: DatabaseSync): void {
+  const cols = db.prepare("PRAGMA table_info(projects)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "agent_token_enc")) {
+    db.exec("ALTER TABLE projects ADD COLUMN agent_token_enc TEXT");
   }
 }
 

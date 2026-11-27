@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildImplementationPrompt } from "@/lib/prd";
 import type { ParsedTask } from "@/lib/tasks";
 import { IconCheck, IconSparkles } from "../icons";
@@ -14,6 +14,12 @@ interface ImplementModalProps {
   onClose: () => void;
 }
 
+interface AgentSyncState {
+  projectId: string;
+  token: string;
+  webhookUrl: string;
+}
+
 export function ImplementModal({
   open,
   projectId,
@@ -24,13 +30,69 @@ export function ImplementModal({
 }: ImplementModalProps) {
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [syncState, setSyncState] = useState<AgentSyncState | null>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncError, setSyncError] = useState("");
+
+  useEffect(() => {
+    if (!open || syncState?.projectId === projectId) return;
+    let cancelled = false;
+    fetch(`/api/projects/${projectId}/agent-token`)
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as {
+          token?: string;
+          webhookUrl?: string;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok || !data.token || !data.webhookUrl) {
+          setSyncError(data.error ?? "Gagal menyiapkan token Live Sync.");
+          return;
+        }
+        setSyncError("");
+        setSyncState({ projectId, token: data.token, webhookUrl: data.webhookUrl });
+      })
+      .catch(() => {
+        if (!cancelled) setSyncError("Tidak bisa menghubungi server untuk Live Sync.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId, syncState?.projectId]);
+
+  const activeSync = syncState?.projectId === projectId ? syncState : null;
+  const isFetchingInitial = open && !activeSync && !syncError;
 
   const promptText = useMemo(
-    () => buildImplementationPrompt(projectTitle, prd, tasks),
-    [projectTitle, prd, tasks],
+    () => buildImplementationPrompt(projectTitle, prd, tasks, activeSync),
+    [projectTitle, prd, tasks, activeSync],
   );
 
   if (!open) return null;
+
+  async function rotateToken() {
+    if (syncLoading || isFetchingInitial) return;
+    setSyncLoading(true);
+    setSyncError("");
+    try {
+      const res = await fetch(`/api/projects/${projectId}/agent-token`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as {
+        token?: string;
+        webhookUrl?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.token || !data.webhookUrl) {
+        setSyncError(data.error ?? "Gagal mereset token agent.");
+        return;
+      }
+      setSyncState({ projectId, token: data.token, webhookUrl: data.webhookUrl });
+      setCopied(false);
+    } catch {
+      setSyncError("Tidak bisa menghubungi server saat mereset token.");
+    } finally {
+      setSyncLoading(false);
+    }
+  }
 
   async function copyPrompt() {
     try {
@@ -80,7 +142,7 @@ export function ImplementModal({
           {[
             { num: "1", title: "Salin prompt", desc: "Sudah berisi PRD lengkap & task terurut." },
             { num: "2", title: "Buka AI coding", desc: "Tempel prompt ke editor / CLI favoritmu." },
-            { num: "3", title: "Lacak progres", desc: "Tandai status task di Kanban MyPRD." },
+            { num: "3", title: "Lacak progres", desc: "Status task di Roadmap & Kanban ter-update otomatis." },
           ].map((step) => (
             <li
               key={step.num}
@@ -95,8 +157,38 @@ export function ImplementModal({
           ))}
         </ol>
 
-        {/* Copy prompt & expandable preview */}
+        {/* Live Sync token status + Copy prompt */}
         <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950/80 p-3.5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5 text-[11px]">
+            <div className="flex items-center gap-2 text-slate-300">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  activeSync
+                    ? "bg-emerald-400"
+                    : syncError
+                      ? "bg-amber-400"
+                      : "bg-slate-500 animate-pulse"
+                }`}
+              />
+              <span>
+                {activeSync
+                  ? "Live Sync aktif — perintah webhook sudah disisipkan di prompt"
+                  : syncError
+                    ? syncError
+                    : "Menyiapkan token Live Sync…"}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void rotateToken()}
+              disabled={syncLoading || isFetchingInitial}
+              className="rounded-lg border border-slate-700/80 bg-slate-900 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-white disabled:opacity-50"
+            >
+              {syncLoading ? "Mereset…" : "Reset Token"}
+            </button>
+          </div>
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
@@ -109,7 +201,8 @@ export function ImplementModal({
             <button
               type="button"
               onClick={() => void copyPrompt()}
-              className="btn-shine inline-flex items-center gap-1.5 rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110"
+              disabled={syncLoading || isFetchingInitial}
+              className="btn-shine inline-flex items-center gap-1.5 rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-50"
             >
               {copied ? (
                 <>

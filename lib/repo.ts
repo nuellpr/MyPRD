@@ -4,6 +4,7 @@
  * Isi pesan & PRD disimpan terenkripsi (AES-256-GCM) di kolom `*_enc`,
  * lalu didekripsi saat dibaca supaya tidak tersebar logika crypto di route.
  */
+import crypto from "node:crypto";
 import { getDb, startOfMonthMs, type MessageRow, type OrderRow, type PrdRow, type ProjectRow, type SessionRow, type UserRow } from "./db.ts";
 import { decryptContent, encryptContent, newId } from "./crypto.ts";
 import { evaluateQuota, isPlanUpgrade, type QuotaState } from "./plans.ts";
@@ -508,6 +509,59 @@ export function getSiteStats(): SiteStats {
     users: Number(row?.users ?? 0),
     prds: Number(row?.prds ?? 0),
   };
+}
+
+function generateAgentToken(): string {
+  return `agt_${crypto.randomBytes(24).toString("base64url")}`;
+}
+
+/** Ambil atau buat token webhook agent khusus satu project (terenkripsi di DB). */
+export function getOrCreateProjectAgentToken(userId: string, projectId: string): string | null {
+  const row = getDb()
+    .prepare("SELECT agent_token_enc FROM projects WHERE id = ? AND user_id = ?")
+    .get(projectId, userId) as { agent_token_enc?: string | null } | undefined;
+  if (!row) return null;
+  if (row.agent_token_enc) {
+    try {
+      return decryptContent(row.agent_token_enc);
+    } catch {
+      // Abaikan ciphertext rusak lalu terbitkan token baru.
+    }
+  }
+  const token = generateAgentToken();
+  getDb()
+    .prepare("UPDATE projects SET agent_token_enc = ? WHERE id = ? AND user_id = ?")
+    .run(encryptContent(token), projectId, userId);
+  return token;
+}
+
+/** Putar ulang token agent project sehingga token lama langsung tidak berlaku. */
+export function rotateProjectAgentToken(userId: string, projectId: string): string | null {
+  const existing = getProject(userId, projectId);
+  if (!existing) return null;
+  const token = generateAgentToken();
+  getDb()
+    .prepare("UPDATE projects SET agent_token_enc = ? WHERE id = ? AND user_id = ?")
+    .run(encryptContent(token), projectId, userId);
+  return token;
+}
+
+/** Verifikasi Bearer token dari AI coding agent dengan timingSafeEqual. */
+export function verifyProjectAgentToken(projectId: string, candidateToken: string): boolean {
+  if (!candidateToken) return false;
+  const row = getDb()
+    .prepare("SELECT agent_token_enc FROM projects WHERE id = ?")
+    .get(projectId) as { agent_token_enc?: string | null } | undefined;
+  if (!row?.agent_token_enc) return false;
+  let stored: string;
+  try {
+    stored = decryptContent(row.agent_token_enc);
+  } catch {
+    return false;
+  }
+  const a = Buffer.from(candidateToken, "utf8");
+  const b = Buffer.from(stored, "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 
