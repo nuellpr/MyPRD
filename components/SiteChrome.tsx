@@ -174,12 +174,18 @@ export function SiteFooter() {
           <span className="text-slate-600">·</span>
           <span>© {new Date().getFullYear()}</span>
         </p>
-        <p className="flex items-center gap-5">
+        <p className="flex flex-wrap items-center gap-5">
           <Link href="/templates" className="transition hover:text-white">
             Template
           </Link>
           <Link href="/komunitas" className="transition hover:text-white">
             Komunitas
+          </Link>
+          <Link href="/privacy" className="transition hover:text-white">
+            Privasi
+          </Link>
+          <Link href="/terms" className="transition hover:text-white">
+            Ketentuan
           </Link>
           <a
             href="https://discord.gg/w3pn2Ey3P"
