@@ -51,15 +51,17 @@ export function RoadmapCanvas({
         return;
       }
 
-      const rootLeft = rootEl.offsetLeft + rootEl.offsetWidth;
-      const rootMidY = rootEl.offsetTop + rootEl.offsetHeight / 2;
+      const rootPos = offsetRelativeTo(rootEl, container);
+      const rootLeft = rootPos.left + rootEl.offsetWidth;
+      const rootMidY = rootPos.top + rootEl.offsetHeight / 2;
 
       const paths: { d: string; id: string }[] = [];
       features.forEach((feat, idx) => {
         const card = featureCardRefs.current[idx];
         if (!card) return;
-        const targetX = card.offsetLeft;
-        const targetY = card.offsetTop + Math.min(44, card.offsetHeight / 2);
+        const cardPos = offsetRelativeTo(card, container);
+        const targetX = cardPos.left;
+        const targetY = cardPos.top + Math.min(44, card.offsetHeight / 2);
         const midX = (rootLeft + targetX) / 2;
         paths.push({
           id: feat.id,
@@ -70,8 +72,17 @@ export function RoadmapCanvas({
     }
 
     computeConnectors();
+    const ro =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(computeConnectors) : null;
+    if (ro) {
+      if (treeRef.current) ro.observe(treeRef.current);
+      if (rootCardRef.current) ro.observe(rootCardRef.current);
+    }
     window.addEventListener("resize", computeConnectors);
-    return () => window.removeEventListener("resize", computeConnectors);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", computeConnectors);
+    };
   }, [features, drawerOpen, zoom]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -422,6 +433,19 @@ export function RoadmapCanvas({
       </div>
     </div>
   );
+}
+
+function offsetRelativeTo(el: HTMLElement, ancestor: HTMLElement) {
+  // Walk offsetParent chain because nested positioned columns reset offsetLeft/offsetTop.
+  let left = 0;
+  let top = 0;
+  let node: HTMLElement | null = el;
+  while (node && node !== ancestor) {
+    left += node.offsetLeft;
+    top += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return { left, top };
 }
 
 function StatusDot({ status }: { status: TaskStatus }) {
