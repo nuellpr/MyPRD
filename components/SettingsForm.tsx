@@ -15,7 +15,16 @@ interface SettingsFormProps {
   initialBio: string;
   initialAvatarUrl: string;
   initialTwoFactorEnabled: boolean;
+  initialTwoFactorMethod: "email" | "totp";
   hasPassword: boolean;
+}
+
+interface TwoFactorSetupPayload {
+  method: "email" | "totp";
+  qrDataUrl?: string;
+  formattedSecret?: string;
+  secret?: string;
+  devCode?: string;
 }
 
 const inputClass =
@@ -67,6 +76,7 @@ export function SettingsForm({
   initialBio,
   initialAvatarUrl,
   initialTwoFactorEnabled,
+  initialTwoFactorMethod,
   hasPassword,
 }: SettingsFormProps) {
   const router = useRouter();
@@ -84,6 +94,11 @@ export function SettingsForm({
   const [error, setError] = useState("");
 
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(initialTwoFactorEnabled);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<"email" | "totp">(initialTwoFactorMethod);
+  const [tfaSetupMethod, setTfaSetupMethod] = useState<"email" | "totp">(initialTwoFactorMethod);
+  const [tfaSetupData, setTfaSetupData] = useState<TwoFactorSetupPayload | null>(null);
+  const [tfaCode, setTfaCode] = useState("");
+  const [tfaSecretCopied, setTfaSecretCopied] = useState(false);
   const [tfaPassword, setTfaPassword] = useState("");
   const [tfaConfirmDisable, setTfaConfirmDisable] = useState(false);
   const [tfaBusy, setTfaBusy] = useState(false);
@@ -164,7 +179,42 @@ export function SettingsForm({
     }
   }
 
-  async function updateTwoFactor(enabled: boolean, password?: string) {
+  async function startTwoFactorSetup(methodOverride?: "email" | "totp") {
+    const method = methodOverride ?? tfaSetupMethod;
+    setTfaBusy(true);
+    setTfaError("");
+    setTfaMessage("");
+    setTfaSecretCopied(false);
+    try {
+      const res = await fetch("/api/settings/2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method }),
+      });
+      const data = (await res.json().catch(() => ({}))) as TwoFactorSetupPayload & { error?: string };
+      if (!res.ok) throw new Error(data.error || "Gagal memulai aktivasi 2FA.");
+      setTfaSetupMethod(method);
+      setTfaSetupData({
+        method,
+        qrDataUrl: data.qrDataUrl,
+        formattedSecret: data.formattedSecret,
+        secret: data.secret,
+        devCode: data.devCode,
+      });
+      setTfaCode("");
+      if (method === "email") {
+        setTfaMessage("Kode aktivasi 6 digit sudah dikirim ke emailmu.");
+      }
+    } catch (err) {
+      setTfaError(err instanceof Error ? err.message : "Gagal memulai aktivasi 2FA.");
+    } finally {
+      setTfaBusy(false);
+    }
+  }
+
+  async function confirmEnableTwoFactor(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!tfaSetupData) return;
     setTfaBusy(true);
     setTfaError("");
     setTfaMessage("");
@@ -172,19 +222,61 @@ export function SettingsForm({
       const res = await fetch("/api/settings/2fa", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, password }),
+        body: JSON.stringify({ enabled: true, method: tfaSetupData.method, code: tfaCode }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(data.error || "Gagal memperbarui status 2FA.");
-      setTwoFactorEnabled(enabled);
-      setTfaConfirmDisable(false);
-      setTfaPassword("");
-      setTfaMessage(enabled ? "2FA aktif: kode OTP 6 digit akan diminta tiap login." : "2FA dinonaktifkan.");
+      if (!res.ok) throw new Error(data.error || "Kode autentikasi tidak valid.");
+      setTwoFactorEnabled(true);
+      setTwoFactorMethod(tfaSetupData.method);
+      setTfaSetupData(null);
+      setTfaCode("");
+      setTfaMessage(
+        tfaSetupData.method === "totp"
+          ? "2FA aktif lewat Aplikasi Autentikator."
+          : "2FA aktif lewat OTP Email.",
+      );
       router.refresh();
     } catch (err) {
-      setTfaError(err instanceof Error ? err.message : "Gagal memperbarui status 2FA.");
+      setTfaError(err instanceof Error ? err.message : "Gagal memverifikasi kode 2FA.");
     } finally {
       setTfaBusy(false);
+    }
+  }
+
+  async function disableTwoFactor(password?: string) {
+    setTfaBusy(true);
+    setTfaError("");
+    setTfaMessage("");
+    try {
+      const res = await fetch("/api/settings/2fa", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false, password }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new Error(data.error || "Gagal menonaktifkan 2FA.");
+      setTwoFactorEnabled(false);
+      setTwoFactorMethod("email");
+      setTfaSetupData(null);
+      setTfaConfirmDisable(false);
+      setTfaPassword("");
+      setTfaMessage("2FA dinonaktifkan.");
+      router.refresh();
+    } catch (err) {
+      setTfaError(err instanceof Error ? err.message : "Gagal menonaktifkan 2FA.");
+    } finally {
+      setTfaBusy(false);
+    }
+  }
+
+  async function copyTotpSecret() {
+    if (!tfaSetupData?.secret) return;
+    try {
+      await navigator.clipboard.writeText(tfaSetupData.secret);
+      setTfaSecretCopied(true);
+      window.setTimeout(() => setTfaSecretCopied(false), 2000);
+    } catch {
+      // Abaikan clipboard error.
     }
   }
 
@@ -407,7 +499,7 @@ export function SettingsForm({
         <section className="rounded-2xl border border-slate-800/90 bg-[#0b1022]/80 p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <IconShield className="h-4 w-4 text-[#35d6ff]" />
                 <h2 className="text-sm font-semibold text-white">Autentikasi Dua Faktor (2FA)</h2>
                 <span
@@ -417,31 +509,26 @@ export function SettingsForm({
                       : "border-slate-700 bg-slate-900 text-slate-400"
                   }`}
                 >
-                  {twoFactorEnabled ? "Aktif" : "Nonaktif"}
+                  {twoFactorEnabled
+                    ? twoFactorMethod === "totp"
+                      ? "Aktif · Aplikasi Autentikator"
+                      : "Aktif · OTP Email"
+                    : "Nonaktif"}
                 </span>
               </div>
               <p className="mt-1 text-xs leading-relaxed text-slate-400">
-                Setiap masuk lewat email atau Google wajib memasukkan kode OTP 6 digit dari emailmu. Gagal 5 kali
-                berturut-turut otomatis mengunci verifikasi selama 24 jam.
+                Setiap masuk lewat email atau Google wajib verifikasi kode 6 digit (via Aplikasi Autentikator atau OTP
+                Email). Gagal 5 kali berturut-turut otomatis mengunci verifikasi selama 24 jam.
               </p>
             </div>
 
-            {!twoFactorEnabled ? (
-              <button
-                type="button"
-                disabled={tfaBusy}
-                onClick={() => void updateTwoFactor(true)}
-                className="rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-50"
-              >
-                {tfaBusy ? "Mengaktifkan..." : "Aktifkan 2FA"}
-              </button>
-            ) : !tfaConfirmDisable ? (
+            {twoFactorEnabled && !tfaConfirmDisable ? (
               <button
                 type="button"
                 disabled={tfaBusy}
                 onClick={() => {
                   if (!hasPassword) {
-                    void updateTwoFactor(false);
+                    void disableTwoFactor();
                   } else {
                     setTfaConfirmDisable(true);
                     setTfaError("");
@@ -455,11 +542,173 @@ export function SettingsForm({
             ) : null}
           </div>
 
+          {!twoFactorEnabled && !tfaSetupData ? (
+            <div className="mt-4 space-y-3 rounded-xl border border-slate-800 bg-[#060912]/70 p-4">
+              <p className="text-xs font-medium text-slate-300">Pilih metode verifikasi 2FA:</p>
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      id: "totp",
+                      title: "Aplikasi Autentikator",
+                      desc: "Scan QR code atau masukkan kunci rahasia di Google Authenticator / Authy / 1Password.",
+                    },
+                    {
+                      id: "email",
+                      title: "Kode OTP Email",
+                      desc: `Kirim kode 6 digit ke ${email} setiap kali login.`,
+                    },
+                  ] as const
+                ).map((opt) => {
+                  const selected = tfaSetupMethod === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setTfaSetupMethod(opt.id)}
+                      className={`rounded-xl border p-3 text-left transition ${
+                        selected
+                          ? "border-[#35d6ff]/70 bg-[#35d6ff]/10"
+                          : "border-slate-800 bg-slate-950/60 hover:border-slate-700"
+                      }`}
+                    >
+                      <p className="text-xs font-semibold text-white">{opt.title}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{opt.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                disabled={tfaBusy}
+                onClick={() => void startTwoFactorSetup()}
+                className="rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-50"
+              >
+                {tfaBusy
+                  ? "Menyiapkan..."
+                  : tfaSetupMethod === "totp"
+                    ? "Buat QR & Kunci Autentikator"
+                    : "Kirim Kode Verifikasi ke Email"}
+              </button>
+            </div>
+          ) : null}
+
+          {!twoFactorEnabled && tfaSetupData ? (
+            <form
+              onSubmit={confirmEnableTwoFactor}
+              className="mt-4 space-y-4 rounded-xl border border-[#35d6ff]/30 bg-[#060912]/80 p-4"
+            >
+              {tfaSetupData.method === "totp" && tfaSetupData.qrDataUrl ? (
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="shrink-0 self-start rounded-2xl bg-white p-2.5 shadow-md">
+                    <Image
+                      src={tfaSetupData.qrDataUrl}
+                      alt="QR Code Aplikasi Autentikator MyPRD"
+                      width={160}
+                      height={160}
+                      unoptimized
+                      className="h-40 w-40"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2.5 text-xs">
+                    <p className="font-semibold text-white">1. Scan QR Code atau masukkan kunci secara manual</p>
+                    <p className="leading-relaxed text-slate-400">
+                      Buka Google Authenticator, Authy, 1Password, atau aplikasi TOTP lainnya lalu scan QR code ini.
+                    </p>
+                    {tfaSetupData.formattedSecret ? (
+                      <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500">Kunci rahasia manual</p>
+                        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                          <code className="font-mono text-xs tracking-wider text-[#7fe3ff] break-all">
+                            {tfaSetupData.formattedSecret}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => void copyTotpSecret()}
+                            className="shrink-0 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:border-[#35d6ff]/60 hover:text-white"
+                          >
+                            {tfaSecretCopied ? "Tersalin!" : "Salin kunci"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1 text-xs">
+                  <p className="font-semibold text-white">Cek inbox emailmu</p>
+                  <p className="text-slate-400">
+                    Masukkan kode 6 digit yang dikirim ke <span className="text-slate-200">{email}</span> untuk
+                    mengaktifkan 2FA.
+                  </p>
+                  {tfaSetupData.devCode ? (
+                    <p className="text-slate-500">
+                      Mode dev — kode: <span className="font-mono text-[#35d6ff]">{tfaSetupData.devCode}</span>
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label htmlFor="tfa-verify-code" className="mb-1.5 block text-xs font-medium text-slate-300">
+                    {tfaSetupData.method === "totp"
+                      ? "2. Masukkan kode 6 digit dari aplikasi Autentikator"
+                      : "Masukkan kode verifikasi 6 digit"}
+                  </label>
+                  <input
+                    id="tfa-verify-code"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    required
+                    value={tfaCode}
+                    onChange={(e) => setTfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="123456"
+                    className={`${inputClass} font-mono tracking-[0.28em]`}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    disabled={tfaBusy || tfaCode.length !== 6}
+                    className="rounded-xl bg-linear-to-r from-[#4f7cff] via-[#35d6ff] to-[#a78bfa] px-4 py-2.5 text-xs font-semibold text-slate-950 transition hover:brightness-110 disabled:opacity-50"
+                  >
+                    {tfaBusy ? "Memverifikasi..." : "Verifikasi & Aktifkan 2FA"}
+                  </button>
+                  {tfaSetupData.method === "email" ? (
+                    <button
+                      type="button"
+                      disabled={tfaBusy}
+                      onClick={() => void startTwoFactorSetup("email")}
+                      className="rounded-xl border border-slate-700 px-3 py-2.5 text-xs text-slate-300 hover:text-white disabled:opacity-50"
+                    >
+                      Kirim ulang
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={tfaBusy}
+                    onClick={() => {
+                      setTfaSetupData(null);
+                      setTfaCode("");
+                      setTfaError("");
+                      setTfaMessage("");
+                    }}
+                    className="rounded-xl border border-slate-700 px-3 py-2.5 text-xs text-slate-300 hover:text-white"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : null}
+
           {tfaConfirmDisable && twoFactorEnabled && hasPassword ? (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                void updateTwoFactor(false, tfaPassword);
+                void disableTwoFactor(tfaPassword);
               }}
               className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-800 bg-[#060912]/70 p-4 sm:flex-row sm:items-end"
             >

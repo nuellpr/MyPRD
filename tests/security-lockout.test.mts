@@ -43,6 +43,31 @@ test("lockout mengunci selama 24 jam setelah 5 kali gagal dan pulih setelah masa
   assert.equal(resetAttempt.locked, false);
 });
 
+test("verifyTotpAttempt memvalidasi TOTP dan mengunci 24 jam setelah 5 kali salah", async () => {
+  const { totpCodeAt } = await import("../lib/totp.ts");
+  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  const email = "totp-lock@example.com";
+  const validCode = totpCodeAt(secret, Date.now());
+  const wrongCode = validCode === "000000" ? "111111" : "000000";
+
+  otp.verifyTotpAttempt(email, secret, validCode);
+
+  for (let i = 0; i < 4; i++) {
+    assert.throws(
+      () => otp.verifyTotpAttempt(email, secret, wrongCode),
+      (err: unknown) => err instanceof AuthError && err.status === 400,
+    );
+  }
+  assert.throws(
+    () => otp.verifyTotpAttempt(email, secret, wrongCode),
+    (err: unknown) => err instanceof AuthError && err.status === 429 && /24 jam/.test(err.message),
+  );
+  assert.throws(
+    () => otp.verifyTotpAttempt(email, secret, validCode),
+    (err: unknown) => err instanceof AuthError && err.status === 429,
+  );
+});
+
 test("OTP 2FA dan pendaftaran mengunci 24 jam setelah 5 kali salah", () => {
   const user = repo.findOrCreateOAuthUser("tfa-user@example.com", "User 2FA");
 

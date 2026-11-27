@@ -2,7 +2,7 @@ import { AuthError, authenticate, setPending2faCookie, setSessionCookie, toPubli
 import { sendEmail } from "@/lib/email";
 import { errorToResponse, jsonError, jsonOk, readJson } from "@/lib/http";
 import { assertNotLocked, clearLockout, recordFailedAttempt } from "@/lib/lockout";
-import { issueOtp } from "@/lib/otp";
+import { issueOtp, otpLockoutKey } from "@/lib/otp";
 import { AUTH_RATE_LIMIT, clientIp, rateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
@@ -44,21 +44,27 @@ export async function POST(request: Request) {
     if (lockKey) clearLockout(lockKey);
 
     if (user.two_factor_enabled === 1) {
-      const code = issueOtp(user.email, "2fa", user.id);
-      await sendEmail({
-        to: user.email,
-        subject: "Kode 2FA masuk MyPRD",
-        html: `<p>Kode verifikasi 2FA MyPRD kamu: <strong style="font-size:24px;letter-spacing:6px">${code}</strong></p><p>Berlaku 10 menit. Jangan bagikan kode ini ke siapa pun.</p>`,
-      });
+      const method = user.two_factor_method === "totp" && user.two_factor_secret_enc ? "totp" : "email";
+      assertNotLocked(otpLockoutKey(user.email, "2fa"), "Verifikasi 2FA");
+      let devCode: string | undefined;
+      if (method === "email") {
+        const code = issueOtp(user.email, "2fa", user.id);
+        await sendEmail({
+          to: user.email,
+          subject: "Kode 2FA masuk MyPRD",
+          html: `<p>Kode verifikasi 2FA MyPRD kamu: <strong style="font-size:24px;letter-spacing:6px">${code}</strong></p><p>Berlaku 10 menit. Jangan bagikan kode ini ke siapa pun.</p>`,
+        });
+        if (process.env.NODE_ENV !== "production" && !process.env.RESEND_API_KEY) {
+          devCode = code;
+        }
+      }
       await setPending2faCookie(user.id, user.email);
-      const response: { requires2fa: true; email: string; devCode?: string } = {
+      return jsonOk({
         requires2fa: true,
         email: user.email,
-      };
-      if (process.env.NODE_ENV !== "production" && !process.env.RESEND_API_KEY) {
-        response.devCode = code;
-      }
-      return jsonOk(response);
+        twoFactorMethod: method,
+        ...(devCode ? { devCode } : {}),
+      });
     }
 
     await setSessionCookie(user.id);

@@ -21,6 +21,8 @@ export interface UserRow {
   bio: string;
   avatar_url: string;
   two_factor_enabled: number;
+  two_factor_method: string;
+  two_factor_secret_enc: string;
   email_verified: number;
   created_at: number;
 }
@@ -99,18 +101,20 @@ PRAGMA temp_store = MEMORY;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
-  id                 TEXT PRIMARY KEY,
-  email              TEXT NOT NULL UNIQUE,
-  name               TEXT NOT NULL DEFAULT '',
-  password_hash      TEXT, -- nullable: user OAuth tidak punya password
-  plan               TEXT NOT NULL DEFAULT 'free',
-  default_model_id   TEXT NOT NULL DEFAULT '',
-  phone              TEXT NOT NULL DEFAULT '',
-  bio                TEXT NOT NULL DEFAULT '',
-  avatar_url         TEXT NOT NULL DEFAULT '',
-  two_factor_enabled INTEGER NOT NULL DEFAULT 0,
-  email_verified     INTEGER NOT NULL DEFAULT 1,
-  created_at         INTEGER NOT NULL
+  id                    TEXT PRIMARY KEY,
+  email                 TEXT NOT NULL UNIQUE,
+  name                  TEXT NOT NULL DEFAULT '',
+  password_hash         TEXT, -- nullable: user OAuth tidak punya password
+  plan                  TEXT NOT NULL DEFAULT 'free',
+  default_model_id      TEXT NOT NULL DEFAULT '',
+  phone                 TEXT NOT NULL DEFAULT '',
+  bio                   TEXT NOT NULL DEFAULT '',
+  avatar_url            TEXT NOT NULL DEFAULT '',
+  two_factor_enabled    INTEGER NOT NULL DEFAULT 0,
+  two_factor_method     TEXT NOT NULL DEFAULT 'email',
+  two_factor_secret_enc TEXT NOT NULL DEFAULT '',
+  email_verified        INTEGER NOT NULL DEFAULT 1,
+  created_at            INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -340,7 +344,7 @@ function sweepExpiredLockouts(db: DatabaseSync): void {
   db.prepare("DELETE FROM auth_lockouts WHERE locked_until > 0 AND locked_until < ?").run(cutoff);
 }
 
-/** Migrasi aditif: kolom foto profil dan flag 2FA pada user. */
+/** Migrasi aditif: kolom foto profil, flag 2FA, metode 2FA, dan secret TOTP terenkripsi. */
 export function migrateUserAvatarAnd2fa(db: DatabaseSync): void {
   const cols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "avatar_url")) {
@@ -348,6 +352,12 @@ export function migrateUserAvatarAnd2fa(db: DatabaseSync): void {
   }
   if (!cols.some((c) => c.name === "two_factor_enabled")) {
     db.exec("ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!cols.some((c) => c.name === "two_factor_method")) {
+    db.exec("ALTER TABLE users ADD COLUMN two_factor_method TEXT NOT NULL DEFAULT 'email'");
+  }
+  if (!cols.some((c) => c.name === "two_factor_secret_enc")) {
+    db.exec("ALTER TABLE users ADD COLUMN two_factor_secret_enc TEXT NOT NULL DEFAULT ''");
   }
 }
 

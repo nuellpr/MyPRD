@@ -80,6 +80,7 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
         error?: string;
         devCode?: string;
         requires2fa?: boolean;
+        twoFactorMethod?: string;
         email?: string;
       };
       if (!res.ok) {
@@ -95,7 +96,11 @@ export function AuthForm({ mode, googleEnabled }: { mode: "login" | "register"; 
         if (data.devCode) params.set("devCode", data.devCode);
         router.push(`/verifikasi-otp?${params.toString()}`);
       } else if (data.requires2fa) {
-        const params = new URLSearchParams({ email: data.email || email, purpose: "2fa" });
+        const params = new URLSearchParams({
+          email: data.email || email,
+          purpose: "2fa",
+          method: data.twoFactorMethod === "totp" ? "totp" : "email",
+        });
         if (nextParam) params.set("next", nextParam);
         if (data.devCode) params.set("devCode", data.devCode);
         router.push(`/verifikasi-otp?${params.toString()}`);

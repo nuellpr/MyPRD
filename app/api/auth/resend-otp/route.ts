@@ -31,6 +31,9 @@ export async function POST(request: Request) {
 
     const user = email ? findUserByEmail(email) : undefined;
     if (!user) return jsonOk({ ok: true });
+    if (purpose === "2fa" && user.two_factor_method === "totp" && user.two_factor_secret_enc) {
+      return jsonError("Akun ini memakai aplikasi Autentikator. Ambil kode 6 digit langsung dari aplikasimu.", 400);
+    }
     if (purpose !== "reset" && purpose !== "2fa" && user.email_verified !== 0) return jsonOk({ ok: true });
 
     const code = issueOtp(user.email, purpose, user.id);

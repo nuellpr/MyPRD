@@ -55,7 +55,7 @@ export default async function SettingsPage() {
                 </span>
                 {user.two_factor_enabled === 1 ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-0.5 text-xs text-emerald-200">
-                    2FA Aktif
+                    {user.two_factor_method === "totp" ? "2FA Aktif · Autentikator" : "2FA Aktif · Email"}
                   </span>
                 ) : null}
                 {admin ? (
@@ -83,6 +83,7 @@ export default async function SettingsPage() {
             initialBio={user.bio}
             initialAvatarUrl={user.avatar_url}
             initialTwoFactorEnabled={user.two_factor_enabled === 1}
+            initialTwoFactorMethod={user.two_factor_method === "totp" ? "totp" : "email"}
             hasPassword={Boolean(user.password_hash)}
           />
         </div>

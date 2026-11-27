@@ -97,6 +97,23 @@ export function verifyTwoFactorToken(token: string): Pending2faPayload | null {
   return payload;
 }
 
+export interface Pending2faSetupPayload {
+  userId: string;
+  secret: string;
+  exp: number;
+}
+
+/** Token sementara setup TOTP saat user memindai QR sebelum konfirmasi kode 6 digit. */
+export function signTwoFactorSetupToken(payload: Pending2faSetupPayload): string {
+  return signTokenPayload(payload, "2fa-setup");
+}
+
+export function verifyTwoFactorSetupToken(token: string): Pending2faSetupPayload | null {
+  const payload = verifyTokenPayload<Pending2faSetupPayload>(token, "2fa-setup");
+  if (!payload || typeof payload.userId !== "string" || typeof payload.secret !== "string") return null;
+  return payload;
+}
+
 function contentKey(): Buffer {
   return crypto.createHash("sha256").update(`content:${appSecret()}`).digest();
 }

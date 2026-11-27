@@ -11,20 +11,28 @@ import { AuthError } from "./auth-error.ts";
 import { getDb, type UserRow } from "./db.ts";
 import { createSession, getActiveSession, revokeSession } from "./repo.ts";
 import {
+  decryptContent,
+  encryptContent,
   hashPassword,
   newId,
   signSession,
+  signTwoFactorSetupToken,
   signTwoFactorToken,
   verifyPassword,
   verifySession,
+  verifyTwoFactorSetupToken,
   verifyTwoFactorToken,
   type Pending2faPayload,
+  type Pending2faSetupPayload,
 } from "./crypto.ts";
 
 export const SESSION_COOKIE = "myprd_session";
 export const PENDING_2FA_COOKIE = "myprd_2fa_pending";
+export const PENDING_2FA_SETUP_COOKIE = "myprd_2fa_setup";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 hari
 const PENDING_2FA_TTL_MS = 1000 * 60 * 10; // 10 menit
+
+export type TwoFactorMethod = "email" | "totp";
 
 export interface PublicUser {
   id: string;
@@ -36,6 +44,7 @@ export interface PublicUser {
   bio: string;
   avatarUrl: string;
   twoFactorEnabled: boolean;
+  twoFactorMethod: TwoFactorMethod;
   createdAt: number;
 }
 
@@ -50,6 +59,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     bio: row.bio,
     avatarUrl: row.avatar_url ?? "",
     twoFactorEnabled: row.two_factor_enabled === 1,
+    twoFactorMethod: row.two_factor_method === "totp" ? "totp" : "email",
     createdAt: row.created_at,
   };
 }
@@ -90,12 +100,14 @@ export function createUser({ email, password, name }: CreateUserInput): UserRow 
     bio: "",
     avatar_url: "",
     two_factor_enabled: 0,
+    two_factor_method: "email",
+    two_factor_secret_enc: "",
     email_verified: 0,
     created_at: Date.now(),
   };
   getDb()
     .prepare(
-      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, avatar_url, two_factor_enabled, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, avatar_url, two_factor_enabled, two_factor_method, two_factor_secret_enc, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       row.id,
@@ -106,6 +118,8 @@ export function createUser({ email, password, name }: CreateUserInput): UserRow 
       row.default_model_id,
       row.avatar_url,
       row.two_factor_enabled,
+      row.two_factor_method,
+      row.two_factor_secret_enc,
       row.email_verified,
       row.created_at,
     );
@@ -132,12 +146,31 @@ export function updateUserProfile(
   return findUserById(userId) ?? null;
 }
 
-/** Aktifkan atau nonaktifkan 2FA via OTP email pada akun user. */
-export function setTwoFactorEnabled(userId: string, enabled: boolean): UserRow | null {
+/** Atur konfigurasi 2FA (email OTP atau TOTP aplikasi autentikator terenkripsi). */
+export function setTwoFactorConfig(
+  userId: string,
+  config: { enabled: boolean; method?: TwoFactorMethod; secret?: string | null },
+): UserRow | null {
   const current = findUserById(userId);
   if (!current) return null;
-  getDb().prepare("UPDATE users SET two_factor_enabled = ? WHERE id = ?").run(enabled ? 1 : 0, userId);
+  const enabled = config.enabled ? 1 : 0;
+  const method: TwoFactorMethod = config.enabled ? (config.method === "totp" ? "totp" : "email") : "email";
+  const secretEnc =
+    config.enabled && method === "totp" && config.secret ? encryptContent(config.secret) : "";
+  getDb()
+    .prepare("UPDATE users SET two_factor_enabled = ?, two_factor_method = ?, two_factor_secret_enc = ? WHERE id = ?")
+    .run(enabled, method, secretEnc, userId);
   return findUserById(userId) ?? null;
+}
+
+/** Dekripsi secret TOTP milik user jika metode TOTP aktif. */
+export function getUserTotpSecret(user: UserRow): string | null {
+  if (!user.two_factor_secret_enc) return null;
+  try {
+    return decryptContent(user.two_factor_secret_enc);
+  } catch {
+    return null;
+  }
 }
 
 /** Ganti password setelah verifikasi password lama. User OAuth ditolak. */
@@ -204,6 +237,29 @@ export async function readPending2faCookie(): Promise<Pending2faPayload | null> 
 export async function clearPending2faCookie(): Promise<void> {
   const store = await cookies();
   store.delete(PENDING_2FA_COOKIE);
+}
+
+export async function setPending2faSetupCookie(userId: string, secret: string): Promise<void> {
+  const store = await cookies();
+  const token = signTwoFactorSetupToken({ userId, secret, exp: Date.now() + PENDING_2FA_TTL_MS });
+  store.set(PENDING_2FA_SETUP_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: Math.floor(PENDING_2FA_TTL_MS / 1000),
+  });
+}
+
+export async function readPending2faSetupCookie(): Promise<Pending2faSetupPayload | null> {
+  const store = await cookies();
+  const token = store.get(PENDING_2FA_SETUP_COOKIE)?.value;
+  return token ? verifyTwoFactorSetupToken(token) : null;
+}
+
+export async function clearPending2faSetupCookie(): Promise<void> {
+  const store = await cookies();
+  store.delete(PENDING_2FA_SETUP_COOKIE);
 }
 
 export async function clearSessionCookie(): Promise<void> {

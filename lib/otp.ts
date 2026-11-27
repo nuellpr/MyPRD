@@ -3,6 +3,7 @@ import { AuthError } from "./auth-error.ts";
 import { generateOtp } from "./crypto.ts";
 import { getDb } from "./db.ts";
 import { assertNotLocked, clearLockout, MAX_AUTH_ATTEMPTS, recordFailedAttempt } from "./lockout.ts";
+import { verifyTotpCode } from "./totp.ts";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_ATTEMPTS = MAX_AUTH_ATTEMPTS;
@@ -117,4 +118,24 @@ export function verifyOtp(email: string, purpose: OtpPurpose, code: string): str
   }
   clearLockout(lockKey);
   return row.user_id;
+}
+
+/** Verifikasi kode TOTP aplikasi autentikator dengan batas 5x gagal -> cooldown 24 jam. */
+export function verifyTotpAttempt(email: string, secret: string, code: string): void {
+  const lockKey = otpLockoutKey(email, "2fa");
+  assertNotLocked(lockKey, "Verifikasi 2FA");
+  if (!verifyTotpCode(secret, code)) {
+    const attempt = recordFailedAttempt(lockKey);
+    if (attempt.locked) {
+      throw new AuthError(
+        `Percobaan gagal mencapai batas ${MAX_AUTH_ATTEMPTS} kali. Verifikasi 2FA dikunci selama 24 jam untuk menghindari ancaman peretasan akun.`,
+        429,
+      );
+    }
+    throw new AuthError(
+      `Kode autentikator salah. Sisa percobaan: ${attempt.remainingAttempts} kali sebelum cooldown 24 jam.`,
+      400,
+    );
+  }
+  clearLockout(lockKey);
 }

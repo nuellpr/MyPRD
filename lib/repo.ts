@@ -453,12 +453,14 @@ export function findOrCreateOAuthUser(email: string, name: string): UserRow {
     bio: "",
     avatar_url: "",
     two_factor_enabled: 0,
+    two_factor_method: "email",
+    two_factor_secret_enc: "",
     email_verified: 0,
     created_at: Date.now(),
   };
   getDb()
     .prepare(
-      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, phone, bio, avatar_url, two_factor_enabled, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO users (id, email, name, password_hash, plan, default_model_id, phone, bio, avatar_url, two_factor_enabled, two_factor_method, two_factor_secret_enc, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       row.id,
@@ -471,6 +473,8 @@ export function findOrCreateOAuthUser(email: string, name: string): UserRow {
       row.bio,
       row.avatar_url,
       row.two_factor_enabled,
+      row.two_factor_method,
+      row.two_factor_secret_enc,
       row.email_verified,
       row.created_at,
     );
